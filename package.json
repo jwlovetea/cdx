@@ -1,0 +1,95 @@
+{
+  "name": "cdx",
+  "displayName": "Clinical Data Explorer",
+  "description": "Open SAS and XPT clinical datasets in Positron via DuckDB and Parquet.",
+  "version": "0.0.2",
+  "publisher": "local",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.74.0",
+    "positron": "^2026.06.1"
+  },
+  "categories": [
+    "Data Science",
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:cdx.openClinicalDataset",
+    "onCommand:cdx.convertClinicalDatasetToParquet",
+    "onCommand:cdx.clearCache",
+    "onCustomEditor:cdx.clinicalDatasetPreview"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "cdx.openClinicalDataset",
+        "title": "CDX: Open Clinical Dataset"
+      },
+      {
+        "command": "cdx.convertClinicalDatasetToParquet",
+        "title": "CDX: Convert Clinical Dataset to Parquet"
+      },
+      {
+        "command": "cdx.clearCache",
+        "title": "CDX: Clear CDX Cache"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "cdx.openClinicalDataset",
+          "when": "resourceExtname == .sas7bdat || resourceExtname == .xpt",
+          "group": "navigation@10"
+        },
+        {
+          "command": "cdx.convertClinicalDatasetToParquet",
+          "when": "resourceExtname == .sas7bdat || resourceExtname == .xpt",
+          "group": "navigation@11"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "cdx.openClinicalDataset"
+        },
+        {
+          "command": "cdx.convertClinicalDatasetToParquet"
+        },
+        {
+          "command": "cdx.clearCache"
+        }
+      ]
+    },
+    "customEditors": [
+      {
+        "viewType": "cdx.clinicalDatasetPreview",
+        "displayName": "Clinical Data Explorer",
+        "selector": [
+          {
+            "filenamePattern": "*.sas7bdat"
+          },
+          {
+            "filenamePattern": "*.xpt"
+          }
+        ],
+        "priority": "default"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "vitest run",
+    "vscode:prepublish": "npm run compile"
+  },
+  "dependencies": {
+    "@duckdb/node-api": "1.5.4-r.1",
+    "@posit-dev/positron": "^0.2.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.14",
+    "@types/vscode": "^1.74.0",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}
