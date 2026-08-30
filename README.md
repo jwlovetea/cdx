@@ -55,6 +55,31 @@ npx @vscode/vsce package
 
 The VSIX must include `node_modules/@duckdb` and `node_modules/@posit-dev`; CDX needs those runtime dependencies after installation.
 
+Packaging only ships the binding for the platform it runs on. Package on
+each platform you intend to support.
+
+### `vsce package` fails with `ELSPROBLEMS`
+
+`vsce` runs `npm list --production` to work out which dependencies to ship,
+and aborts if npm reports anything invalid. npm 10 can leave empty
+directories behind for the `@duckdb/node-bindings-*` packages it correctly
+skips on `os`/`cpu` mismatch, and npm then reports each one as invalid:
+
+```sh
+npm error invalid: @duckdb/node-bindings-linux-x64@ .../node_modules/@duckdb/node-bindings-linux-x64
+```
+
+Remove the empty directories and package again:
+
+```sh
+find node_modules/@duckdb -type d -empty -print -delete
+vsce package
+```
+
+This is safe: only the host platform's binding is populated, the rest are
+empty shells left over from a skipped install. A future `npm install` can
+recreate them.
+
 ## Notes
 
 DuckDB installs `read_stat` from the community extension repository the first time it is used:

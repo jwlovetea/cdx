@@ -2,7 +2,9 @@ src
 test
 out/test
 .vscode
+.workbuddy-ai
 coverage
+*.vsix
 *.ts
 *.mts
 tsconfig.json
