@@ -1,5 +1,6 @@
-import { DuckDBInstance } from '@duckdb/node-api';
-import type { DuckDBConnection } from '@duckdb/node-api';
+// Types only. The module itself is loaded on first use: see {@link
+// DuckDbService.#openSession}.
+import type { DuckDBConnection, DuckDBInstance } from '@duckdb/node-api';
 import type * as vscode from 'vscode';
 import { duckdbStringLiteral } from './duckdbSql';
 
@@ -153,7 +154,12 @@ export class DuckDbService {
   }
 
   async #openSession(): Promise<DuckDbSession> {
-    const instance = await DuckDBInstance.create(':memory:');
+    // Loaded here, not at module scope. This binds a native library, and if it
+    // cannot load, a top-level import would take the whole extension down with
+    // it: activation would fail, the custom editor would never register, and
+    // the user would get an unexplained empty view instead of an error.
+    const { DuckDBInstance: NativeDuckDb } = await import('@duckdb/node-api');
+    const instance = await NativeDuckDb.create(':memory:');
 
     try {
       const connection = await instance.connect();

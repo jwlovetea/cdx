@@ -12,3 +12,4 @@ tsconfig.test.json
 vitest.config.mts
 eslint.config.mjs
 package-lock.json
+out/.stale/**
