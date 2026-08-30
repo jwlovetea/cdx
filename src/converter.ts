@@ -1,8 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import * as vscode from 'vscode';
 import { ensureCacheDirectory, getCachedParquetUri } from './cache';
-import { requireClinicalDatasetFormat } from './clinicalDataset';
-import type { ClinicalDatasetFormat } from './clinicalDataset';
+import { type ClinicalDatasetFormat, requireClinicalDatasetFormat } from './clinicalDataset';
 import type { DuckDbService } from './duckdb';
 import { duckdbStringLiteral } from './duckdbSql';
 import { OperationCancelledError } from './errors';
@@ -12,7 +11,7 @@ import { deleteQuietly, fileExists } from './workspaceFs';
 export type ConversionProgressReporter = (message: string) => void;
 
 export interface ConvertOptions {
-  /** Cancels the conversion; checked before and during the DuckDB run. */
+  /** Cancels the conversion; checked before each slow step. */
   readonly token?: vscode.CancellationToken;
   /** Called with progress messages; safe to omit. */
   readonly onProgress?: ConversionProgressReporter;
@@ -45,8 +44,8 @@ export class ClinicalDatasetConverter {
   public async convert(sourceUri: vscode.Uri, options: ConvertOptions = {}): Promise<vscode.Uri> {
     throwIfCancelled(options.token);
 
-    // Validated before any I/O: the extension check is pure string handling, so
-    // an unsupported file is rejected without touching the disk or DuckDB.
+    // Validated before the cache directory is touched so an unsupported
+    // extension is reported as such, rather than as a file that cannot be read.
     const format = requireClinicalDatasetFormat(sourceUri.fsPath);
 
     const outputUri = await getCachedParquetUri(this.#context, sourceUri);
@@ -102,7 +101,12 @@ export class ClinicalDatasetConverter {
     token?: vscode.CancellationToken
   ): Promise<void> {
     const tempUri = createTempUri(outputUri);
-    const cancellation = token ? this.#duckDb.observeCancellation(token) : undefined;
+
+    // Cancellation has to reach DuckDB itself: a single COPY over a large
+    // dataset runs for minutes, and without this the user's cancel would only
+    // take effect after the statement finished.
+    const onCancel = this.#duckDb.interrupt.bind(this.#duckDb);
+    const cancellation = token?.onCancellationRequested(onCancel);
 
     try {
       throwIfCancelled(token);

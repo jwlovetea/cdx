@@ -26,6 +26,24 @@ Tests run outside the extension host, so `vscode` is aliased to an in-memory
 stub at `src/test/__mocks__/vscode.ts`. It implements enough of `Uri` and
 `workspace.fs` for the cache and converter layers to be exercised directly.
 
+## Layout
+
+| Module | Responsibility |
+| --- | --- |
+| `extension.ts` | Command and custom editor registration; user-facing messaging |
+| `converter.ts` | Cache reuse, in-flight de-duplication, atomic writes, cancellation |
+| `duckdb.ts` | Owns the shared DuckDB database and the `read_stat` extension |
+| `duckdbSql.ts` | SQL literal and identifier quoting |
+| `cache.ts` / `cacheUtils.ts` | Cache paths, keys and file name sanitising |
+| `workspaceFs.ts` | Exception-based `workspace.fs` calls as explicit results |
+| `errors.ts` | Error types; deliberately free of any `vscode` import |
+
+DuckDB is started once per activation and reused, because opening it and
+resolving `read_stat` costs hundreds of milliseconds. Conversions write to a
+temporary file and rename it into place, so a cancelled or failed run cannot
+leave a partial file that a later run would treat as a cache hit. Cancelling
+interrupts the running `COPY` rather than waiting for it to finish.
+
 ## Packaging
 
 Build the extension before packaging:

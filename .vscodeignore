@@ -2,6 +2,7 @@ src
 test
 out/test
 .vscode
+coverage
 *.ts
 *.mts
 tsconfig.json

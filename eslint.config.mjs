@@ -52,7 +52,14 @@ export default tseslint.config(
       '@typescript-eslint/naming-convention': [
         'error',
         { selector: 'variableLike', format: ['camelCase', 'PascalCase', 'UPPER_CASE'] },
-        { selector: 'typeLike', format: ['PascalCase'] }
+        { selector: 'typeLike', format: ['PascalCase'] },
+        // A leading underscore marks a parameter that is deliberately unused,
+        // such as the resolver of a promise a test only ever rejects.
+        {
+          selector: 'parameter',
+          format: ['camelCase', 'PascalCase'],
+          leadingUnderscore: 'allow'
+        }
       ],
 
       eqeqeq: ['error', 'always', { null: 'ignore' }],

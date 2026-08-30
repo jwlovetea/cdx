@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ClinicalDatasetConverter } from '../converter';
 import type { DuckDbService } from '../duckdb';
 import { OperationCancelledError } from '../errors';
@@ -16,7 +16,11 @@ const SOURCE = '/study/adam/adsl.sas7bdat';
 class FakeDuckDb {
   public readonly statements: string[] = [];
   public invalidations = 0;
+  public interrupts = 0;
   public shouldFail = false;
+  /** Holds the `COPY` open so a test can cancel while it is "running". */
+  public pauseOnRun = false;
+  #pending: { reject: (error: unknown) => void } | undefined;
 
   public getSession(): Promise<{ connection: { run: (sql: string) => Promise<void> } }> {
     return Promise.resolve({
@@ -28,6 +32,12 @@ class FakeDuckDb {
 
           if (this.shouldFail) {
             return Promise.reject(new Error('read_stat exploded'));
+          }
+
+          if (this.pauseOnRun) {
+            return new Promise<void>((_resolve, reject) => {
+              this.#pending = { reject };
+            });
           }
 
           const target = /TO '([^']+)' \(FORMAT PARQUET\)/.exec(sql)?.[1];
@@ -45,17 +55,49 @@ class FakeDuckDb {
     this.invalidations += 1;
   }
 
-  public observeCancellation(): vscode.Disposable {
-    return {
-      dispose: () => {
-        // Nothing to detach in the fake.
-      }
-    };
+  /** Mirrors DuckDB: interrupting rejects the statement that is running. */
+  public interrupt(): void {
+    this.interrupts += 1;
+    this.#pending?.reject(new Error('Query was interrupted'));
+    this.#pending = undefined;
   }
 
   public dispose(): Promise<void> {
     return Promise.resolve();
   }
+}
+
+/**
+ * A cancellation token a test can fire on demand.
+ *
+ * Also counts listener disposals so tests can assert the converter detaches
+ * its cancellation listener instead of leaking one per conversion.
+ */
+function controllableToken(): {
+  token: vscode.CancellationToken;
+  cancel: () => void;
+  disposeCount: () => number;
+} {
+  // The listener is typed with an optional event so it satisfies vscode's
+  // `Event<T>` signature, which always passes one.
+  let listener: ((event?: unknown) => void) | undefined;
+  let disposals = 0;
+
+  return {
+    token: {
+      isCancellationRequested: false,
+      onCancellationRequested: (callback: (event?: unknown) => void): vscode.Disposable => {
+        listener = callback;
+        return {
+          dispose: () => {
+            disposals += 1;
+          }
+        };
+      }
+    },
+    cancel: () => listener?.(),
+    disposeCount: () => disposals
+  };
 }
 
 function cancelledToken(): vscode.CancellationToken {
@@ -168,6 +210,32 @@ describe('ClinicalDatasetConverter', () => {
     ).rejects.toThrow(OperationCancelledError);
 
     expect(duckDb.statements).toHaveLength(0);
+  });
+
+  it('interrupts the running DuckDB query when the user cancels', async () => {
+    duckDb.pauseOnRun = true;
+    const { token, cancel } = controllableToken();
+
+    const conversion = converter.convert(vscode.Uri.file(SOURCE), { token });
+    await vi.waitFor(() => {
+      expect(duckDb.statements).toHaveLength(1);
+    });
+
+    cancel();
+
+    // The rejection comes from DuckDB being interrupted rather than from a
+    // cancellation check, so the converter must still clean up after it.
+    await expect(conversion).rejects.toThrow('Query was interrupted');
+    expect(duckDb.interrupts).toBe(1);
+    expect(listPaths().filter((path) => path.endsWith('.tmp'))).toEqual([]);
+  });
+
+  it('detaches the cancellation listener once the conversion finishes', async () => {
+    const { token, disposeCount } = controllableToken();
+
+    await converter.convert(vscode.Uri.file(SOURCE), { token });
+
+    expect(disposeCount()).toBe(1);
   });
 
   it('leaves no partial file behind when the conversion fails', async () => {
