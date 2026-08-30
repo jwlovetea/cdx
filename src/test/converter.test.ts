@@ -18,6 +18,8 @@ class FakeDuckDb {
   public invalidations = 0;
   public interrupts = 0;
   public shouldFail = false;
+  /** Columns reported by {@link countParquetColumns}; `0` forces the guard. */
+  public columnCount = 3;
   /** Holds the `COPY` open so a test can cancel while it is "running". */
   public pauseOnRun = false;
   #pending: { reject: (error: unknown) => void } | undefined;
@@ -60,6 +62,24 @@ class FakeDuckDb {
     this.interrupts += 1;
     this.#pending?.reject(new Error('Query was interrupted'));
     this.#pending = undefined;
+  }
+
+  /** Mirrors the real service: cancels on token fire, detaches on dispose. */
+  public observeCancellation(token: vscode.CancellationToken): vscode.Disposable {
+    const listener = token.onCancellationRequested(() => {
+      this.interrupt();
+    });
+
+    return {
+      dispose: (): void => {
+        listener.dispose();
+      }
+    };
+  }
+
+  /** Reports a plausible schema; tests override it to force an empty result. */
+  public countParquetColumns(): Promise<number> {
+    return Promise.resolve(this.columnCount);
   }
 
   public dispose(): Promise<void> {
@@ -191,7 +211,9 @@ describe('ClinicalDatasetConverter', () => {
     expect(messages).toContain('Preparing cache...');
     expect(messages).toContain('Reading with DuckDB read_stat...');
     expect(messages).toContain('Parquet file ready.');
-    expect(messages.at(-1)).toBe('Parquet file ready.');
+    // The result is verified last, so a hang there is visible in the UI.
+    expect(messages).toContain('Checking result...');
+    expect(messages.at(-1)).toBe('Checking result...');
   });
 
   it('reuses the cache without reporting a conversion', async () => {
@@ -282,5 +304,23 @@ describe('ClinicalDatasetConverter', () => {
 
     expect(after.toString()).not.toBe(before.toString());
     expect(duckDb.statements).toHaveLength(2);
+  });
+
+  it('refuses a result with no columns instead of opening an empty grid', async () => {
+    duckDb.columnCount = 0;
+
+    await expect(converter.convert(vscode.Uri.file(SOURCE))).rejects.toThrow(/no columns/);
+  });
+
+  it('drops a column-less cache entry so the next open does not reuse it', async () => {
+    duckDb.columnCount = 0;
+    await expect(converter.convert(vscode.Uri.file(SOURCE))).rejects.toThrow(/no columns/);
+
+    duckDb.columnCount = 3;
+    const parquetUri = await converter.convert(vscode.Uri.file(SOURCE));
+
+    // Two COPY statements: the discarded result was not treated as a hit.
+    expect(duckDb.statements).toHaveLength(2);
+    expect(listPaths()).toContain(parquetUri.fsPath);
   });
 });

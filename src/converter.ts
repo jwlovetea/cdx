@@ -1,10 +1,11 @@
 import { randomBytes } from 'node:crypto';
+import { basename } from 'node:path';
 import * as vscode from 'vscode';
 import { ensureCacheDirectory, getCachedParquetUri } from './cache';
 import { type ClinicalDatasetFormat, requireClinicalDatasetFormat } from './clinicalDataset';
 import type { DuckDbService } from './duckdb';
 import { duckdbStringLiteral } from './duckdbSql';
-import { OperationCancelledError } from './errors';
+import { CdxError, OperationCancelledError } from './errors';
 import { deleteQuietly, fileSize } from './workspaceFs';
 
 /** Reports human-readable conversion progress to the caller. */
@@ -56,12 +57,45 @@ export class ClinicalDatasetConverter {
       return pending;
     }
 
-    const conversion = this.#convertTo(sourceUri, outputUri, format, options).finally(() => {
-      this.#inFlight.delete(outputKey);
-    });
+    const conversion = this.#convertTo(sourceUri, outputUri, format, options)
+      .then(async (uri) => {
+        await this.#assertReadable(uri, sourceUri, options.onProgress);
+        return uri;
+      })
+      .finally(() => {
+        this.#inFlight.delete(outputKey);
+      });
     this.#inFlight.set(outputKey, conversion);
 
     return conversion;
+  }
+
+  /**
+   * Refuses to hand back a Parquet file that would open as an empty grid.
+   *
+   * Such a file is valid Parquet, so the Data Explorer opens it without
+   * complaint and simply shows nothing. That reads as a viewer fault rather
+   * than a conversion failure, so it is caught here instead: the entry is
+   * dropped from the cache too, otherwise every later open would hit the same
+   * dead result.
+   */
+  async #assertReadable(
+    outputUri: vscode.Uri,
+    sourceUri: vscode.Uri,
+    onProgress?: ConversionProgressReporter
+  ): Promise<void> {
+    onProgress?.('Checking result...');
+
+    const columnCount = await this.#duckDb.countParquetColumns(outputUri.fsPath);
+    if (columnCount !== 0) {
+      return;
+    }
+
+    await deleteQuietly(outputUri);
+    throw new CdxError(
+      `CDX converted ${basename(sourceUri.fsPath)} but the result has no columns. ` +
+        'See the CDX output channel for details.'
+    );
   }
 
   async #convertTo(
@@ -108,8 +142,11 @@ export class ClinicalDatasetConverter {
     // Cancellation has to reach DuckDB itself: a single COPY over a large
     // dataset runs for minutes, and without this the user's cancel would only
     // take effect after the statement finished.
-    const onCancel = this.#duckDb.interrupt.bind(this.#duckDb);
-    const cancellation = token?.onCancellationRequested(onCancel);
+    //
+    // Routed through the service rather than a bare listener because that also
+    // clears any interrupt left over from an earlier conversion, which would
+    // otherwise cancel this one the moment it started.
+    const cancellation = token ? this.#duckDb.observeCancellation(token) : undefined;
 
     try {
       throwIfCancelled(token);

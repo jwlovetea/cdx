@@ -5,6 +5,9 @@ import { duckdbStringLiteral } from './duckdbSql';
 
 const READ_STAT_EXTENSION = 'read_stat';
 
+/** Returned by {@link DuckDbService.countParquetColumns} when it cannot tell. */
+export const UNKNOWN_COLUMN_COUNT = -1;
+
 /** An open DuckDB database together with the connection used to query it. */
 export interface DuckDbSession {
   readonly instance: DuckDBInstance;
@@ -116,11 +119,36 @@ export class DuckDbService {
     };
   }
 
+  /**
+   * Counts the top-level columns in a Parquet file.
+   *
+   * A Parquet file with no columns opens happily in the Data Explorer and shows
+   * an empty grid, which reads as a viewer fault rather than a conversion
+   * failure. Counting the columns turns that silent case into a reportable one.
+   *
+   * Returns {@link UNKNOWN_COLUMN_COUNT} when the file cannot be inspected, so
+   * a failing check never blocks a file that may be perfectly readable.
+   */
+  public async countParquetColumns(parquetPath: string): Promise<number> {
+    try {
+      const { connection } = await this.getSession();
+      const reader = await connection.runAndReadAll(
+        `SELECT count(*) AS column_count ` +
+          `FROM (DESCRIBE SELECT * FROM read_parquet(${duckdbStringLiteral(parquetPath)}))`
+      );
+
+      return toColumnCount(reader.getRowObjects()[0]?.['column_count']);
+    } catch {
+      return UNKNOWN_COLUMN_COUNT;
+    }
+  }
+
   /** Closes the database. Safe to call more than once. */
   public async dispose(): Promise<void> {
     const session = this.#session;
     this.#session = undefined;
     this.#live = undefined;
+    this.#interruptRequested = false;
     await this.#close(session);
   }
 
@@ -151,6 +179,17 @@ export class DuckDbService {
       // the instance. Either way there is nothing left to close.
     }
   }
+}
+
+/** Normalises the `count(*)` result, which DuckDB returns as a BigInt. */
+function toColumnCount(value: unknown): number {
+  if (typeof value === 'bigint' || typeof value === 'number') {
+    return Number(value);
+  }
+
+  const parsed = Number(value);
+
+  return Number.isFinite(parsed) ? parsed : UNKNOWN_COLUMN_COUNT;
 }
 
 async function loadReadStat(connection: DuckDBConnection): Promise<void> {
