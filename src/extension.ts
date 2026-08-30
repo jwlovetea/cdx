@@ -11,6 +11,7 @@ import { renderPreviewHtml } from './previewHtml';
 const COMMAND_OPEN = 'cdx.openClinicalDataset';
 const COMMAND_CONVERT = 'cdx.convertClinicalDatasetToParquet';
 const COMMAND_CLEAR_CACHE = 'cdx.clearCache';
+const COMMAND_SHOW_LOG = 'cdx.showLog';
 
 const OPEN_DIALOG_FILTERS: vscode.OpenDialogOptions['filters'] = {
   'Clinical datasets': ['sas7bdat', 'xpt']
@@ -27,6 +28,13 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const converter = new ClinicalDatasetConverter(context, duckDbService);
   const previewProvider = new ClinicalDatasetPreviewProvider(converter);
+
+  context.subscriptions.push(
+    createStatusBar(context),
+    registerCommand(COMMAND_SHOW_LOG, () => {
+      revealLog();
+    })
+  );
 
   context.subscriptions.push(
     previewProvider,
@@ -69,13 +77,6 @@ export function activate(context: vscode.ExtensionContext): void {
 }
 
 /**
- * Releases DuckDB's native resources.
- *
- * Returns the pending shutdown so the extension host waits for it instead of
- * tearing the process down mid-close, which can leak the database file or crash
- * on an in-flight native call.
- */
-/**
  * Reads the installed version, so the log shows which build is actually live.
  *
  * `packageJSON` is untyped, so the value is narrowed rather than trusted.
@@ -90,6 +91,31 @@ function extensionVersion(context: vscode.ExtensionContext): string {
   return typeof version === 'string' ? version : '?';
 }
 
+/**
+ * Puts a marker in the status bar so "is CDX actually loaded?" is answerable
+ * at a glance.
+ *
+ * Without it, an extension that failed to activate is indistinguishable from
+ * one that converted badly: both leave the user looking at an empty view with
+ * no error anywhere. The version is shown so the running build is identifiable.
+ */
+function createStatusBar(context: vscode.ExtensionContext): vscode.Disposable {
+  const item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+  item.text = `CDX ${extensionVersion(context)}`;
+  item.tooltip = 'Clinical Data Explorer is active. Click to open the CDX log.';
+  item.command = COMMAND_SHOW_LOG;
+  item.show();
+
+  return item;
+}
+
+/**
+ * Releases DuckDB's native resources.
+ *
+ * Returns the pending shutdown so the extension host waits for it instead of
+ * tearing the process down mid-close, which can leak the database file or crash
+ * on an in-flight native call.
+ */
 export function deactivate(): Promise<void> | undefined {
   logInfo('deactivate');
   disposeLog();
@@ -106,7 +132,7 @@ export function deactivate(): Promise<void> | undefined {
  */
 function registerCommand<Args extends unknown[]>(
   command: string,
-  handler: (...args: Args) => Promise<void>
+  handler: (...args: Args) => Promise<void> | void
 ): vscode.Disposable {
   return vscode.commands.registerCommand(command, async (...args: Args) => {
     try {
