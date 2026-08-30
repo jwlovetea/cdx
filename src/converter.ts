@@ -5,7 +5,7 @@ import { type ClinicalDatasetFormat, requireClinicalDatasetFormat } from './clin
 import type { DuckDbService } from './duckdb';
 import { duckdbStringLiteral } from './duckdbSql';
 import { OperationCancelledError } from './errors';
-import { deleteQuietly, fileExists } from './workspaceFs';
+import { deleteQuietly, fileSize } from './workspaceFs';
 
 /** Reports human-readable conversion progress to the caller. */
 export type ConversionProgressReporter = (message: string) => void;
@@ -76,7 +76,10 @@ export class ClinicalDatasetConverter {
     await ensureCacheDirectory(this.#context);
     throwIfCancelled(token);
 
-    if (await fileExists(outputUri)) {
+    // A zero-byte file counts as a miss. It can only come from a run that
+    // failed after creating the file, and opening it would show an empty
+    // dataset rather than an error.
+    if (((await fileSize(outputUri)) ?? 0) > 0) {
       onProgress?.('Using cached Parquet file.');
       return outputUri;
     }

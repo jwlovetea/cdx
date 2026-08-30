@@ -148,6 +148,16 @@ describe('ClinicalDatasetConverter', () => {
     expect(duckDb.statements).toHaveLength(1);
   });
 
+  it('re-converts when the cached file is zero bytes', async () => {
+    const cached = await converter.convert(vscode.Uri.file(SOURCE));
+    // Simulate a cache entry left empty by an earlier failed run.
+    seedFile(cached.fsPath, '');
+
+    await converter.convert(vscode.Uri.file(SOURCE));
+
+    expect(duckDb.statements).toHaveLength(2);
+  });
+
   it('collapses concurrent requests for the same source into one conversion', async () => {
     const uri = vscode.Uri.file(SOURCE);
     const results = await Promise.all([

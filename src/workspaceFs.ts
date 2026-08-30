@@ -33,6 +33,20 @@ export async function statOrThrow(uri: vscode.Uri): Promise<vscode.FileStat> {
 }
 
 /**
+ * Returns the size of `uri` in bytes, or `null` if it does not exist.
+ *
+ * Used to reject zero-byte cache entries: the VS Code API has no non-throwing
+ * existence check, so a failed `stat` is the only signal available.
+ */
+export async function fileSize(uri: vscode.Uri): Promise<number | null> {
+  try {
+    return (await vscode.workspace.fs.stat(uri)).size;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Deletes `uri`, ignoring failures.
  *
  * Used for cleanup paths where the caller is already handling a more useful

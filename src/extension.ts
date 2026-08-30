@@ -5,6 +5,7 @@ import { detectClinicalDatasetFormat } from './clinicalDataset';
 import { ClinicalDatasetConverter } from './converter';
 import { DuckDbService } from './duckdb';
 import { CdxError, formatError, isCancellation } from './errors';
+import { disposeLog, logInfo, revealLog, logError } from './log';
 import { renderPreviewHtml } from './previewHtml';
 
 const COMMAND_OPEN = 'cdx.openClinicalDataset';
@@ -19,6 +20,8 @@ const OPEN_DIALOG_FILTERS: vscode.OpenDialogOptions['filters'] = {
 let duckDb: DuckDbService | undefined;
 
 export function activate(context: vscode.ExtensionContext): void {
+  logInfo(`activate (version ${extensionVersion(context)})`);
+
   const duckDbService = new DuckDbService();
   duckDb = duckDbService;
 
@@ -72,7 +75,25 @@ export function activate(context: vscode.ExtensionContext): void {
  * tearing the process down mid-close, which can leak the database file or crash
  * on an in-flight native call.
  */
+/**
+ * Reads the installed version, so the log shows which build is actually live.
+ *
+ * `packageJSON` is untyped, so the value is narrowed rather than trusted.
+ */
+function extensionVersion(context: vscode.ExtensionContext): string {
+  const metadata: unknown = context.extension.packageJSON;
+  const version =
+    typeof metadata === 'object' && metadata !== null
+      ? (metadata as { version?: unknown }).version
+      : undefined;
+
+  return typeof version === 'string' ? version : '?';
+}
+
 export function deactivate(): Promise<void> | undefined {
+  logInfo('deactivate');
+  disposeLog();
+
   const service = duckDb;
   duckDb = undefined;
   return service?.dispose();
@@ -147,14 +168,35 @@ async function convertWithProgress(
       title: `CDX: ${title}`,
       cancellable: true
     },
-    async (progress, token) =>
-      converter.convert(sourceUri, {
-        token,
-        onProgress: (message) => {
-          progress.report({ message });
-        }
-      })
+    async (progress, token) => {
+      logInfo(`convert: ${sourceUri.fsPath}`);
+
+      try {
+        const parquetUri = await converter.convert(sourceUri, {
+          token,
+          onProgress: (message) => {
+            logInfo(`  ${message}`);
+            progress.report({ message });
+          }
+        });
+
+        logInfo(`  -> ${parquetUri.fsPath}`);
+        return parquetUri;
+      } catch (error) {
+        logError(`convert failed for ${sourceUri.fsPath}`, error);
+        throw error;
+      }
+    }
   );
+}
+
+/** Returns the size of `uri` in bytes, or -1 if it cannot be read. */
+async function statSize(uri: vscode.Uri): Promise<number> {
+  try {
+    return (await vscode.workspace.fs.stat(uri)).size;
+  } catch {
+    return -1;
+  }
 }
 
 interface ClinicalDatasetDocument extends vscode.CustomDocument {
@@ -222,7 +264,10 @@ class ClinicalDatasetPreviewProvider
     });
 
     const documentKey = document.uri.toString();
+    logInfo(`resolveCustomEditor: ${documentKey}`);
+
     if (this.#autoOpened.has(documentKey)) {
+      logInfo('  already auto-opened this session; showing the placeholder');
       return;
     }
 
@@ -257,14 +302,25 @@ class ClinicalDatasetPreviewProvider
         sourceUri,
         'Opening clinical dataset'
       );
+
+      // Size is logged so an empty result is visible: a zero-byte Parquet
+      // opens happily in the Data Explorer and just shows nothing.
+      const size = await statSize(parquetUri);
+      logInfo(`opening ${parquetUri.fsPath} (${size} bytes)`);
+
       await vscode.commands.executeCommand('vscode.open', parquetUri);
 
       if (options.closeOnSuccess === true) {
         webviewPanel.dispose();
       }
     } catch (error) {
+      // Cancellations stay silent in the UI, but they are exactly the case
+      // that looks like "no data", so they go to the log.
+      logError(`openDataset ${sourceUri.fsPath}`, error);
+
       if (!isCancellation(error)) {
         void vscode.window.showErrorMessage(formatError(error));
+        revealLog();
       }
     }
   }
