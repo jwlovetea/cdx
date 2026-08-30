@@ -3,7 +3,7 @@ import { basename } from 'node:path';
 import * as vscode from 'vscode';
 import { ensureCacheDirectory, getCachedParquetUri } from './cache';
 import { type ClinicalDatasetFormat, requireClinicalDatasetFormat } from './clinicalDataset';
-import type { DuckDbService } from './duckdb';
+import { UNKNOWN_COLUMN_COUNT, type DuckDbService } from './duckdb';
 import { duckdbStringLiteral } from './duckdbSql';
 import { CdxError, OperationCancelledError } from './errors';
 import { deleteQuietly, fileSize } from './workspaceFs';
@@ -110,12 +110,22 @@ export class ClinicalDatasetConverter {
     await ensureCacheDirectory(this.#context);
     throwIfCancelled(token);
 
-    // A zero-byte file counts as a miss. It can only come from a run that
-    // failed after creating the file, and opening it would show an empty
-    // dataset rather than an error.
-    if (((await fileSize(outputUri)) ?? 0) > 0) {
-      onProgress?.('Using cached Parquet file.');
-      return outputUri;
+    const cachedSize = await fileSize(outputUri);
+    if ((cachedSize ?? 0) > 0) {
+      const columnCount = await this.#duckDb.countParquetColumns(outputUri.fsPath);
+
+      if (columnCount === 0) {
+        onProgress?.('Cached Parquet file is empty; regenerating it.');
+        await deleteQuietly(outputUri);
+      } else if (columnCount !== UNKNOWN_COLUMN_COUNT) {
+        onProgress?.('Using cached Parquet file.');
+        return outputUri;
+      } else {
+        onProgress?.('Cached Parquet file could not be inspected; regenerating it.');
+        await deleteQuietly(outputUri);
+      }
+    } else {
+      onProgress?.('Cached Parquet file is missing or empty; reading with DuckDB read_stat...');
     }
 
     onProgress?.('Reading with DuckDB read_stat...');

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { getCachedParquetUri } from '../cache';
 import { ClinicalDatasetConverter } from '../converter';
 import type { DuckDbService } from '../duckdb';
 import { OperationCancelledError } from '../errors';
@@ -304,6 +305,16 @@ describe('ClinicalDatasetConverter', () => {
 
     expect(after.toString()).not.toBe(before.toString());
     expect(duckDb.statements).toHaveLength(2);
+  });
+
+  it('refuses a stale cached parquet result that has no columns', async () => {
+    const sourceUri = vscode.Uri.file(SOURCE);
+    const cachedUri = await getCachedParquetUri(createContext(), sourceUri);
+    seedFile(cachedUri.fsPath, 'stale parquet bytes', 128);
+    duckDb.columnCount = 0;
+
+    await expect(converter.convert(sourceUri)).rejects.toThrow(/no columns/);
+    expect(listPaths()).not.toContain(cachedUri.fsPath);
   });
 
   it('refuses a result with no columns instead of opening an empty grid', async () => {
