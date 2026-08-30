@@ -79,7 +79,12 @@
   "scripts": {
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
+    "typecheck": "tsc -p ./tsconfig.test.json",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "npm run typecheck && npm run lint && npm run test",
     "vscode:prepublish": "npm run compile"
   },
   "dependencies": {
@@ -87,9 +92,13 @@
     "@posit-dev/positron": "^0.2.5"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@types/node": "^22.13.14",
     "@types/vscode": "^1.74.0",
+    "eslint": "^9.39.5",
+    "globals": "^16.5.0",
     "typescript": "^5.9.2",
+    "typescript-eslint": "^8.68.0",
     "vitest": "^3.2.4"
   }
 }

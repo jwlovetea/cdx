@@ -3,6 +3,9 @@ test
 out/test
 .vscode
 *.ts
+*.mts
 tsconfig.json
-vitest.config.ts
+tsconfig.test.json
+vitest.config.mts
+eslint.config.mjs
 package-lock.json

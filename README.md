@@ -12,6 +12,20 @@ In Positron, Parquet files are handled by the native Data Explorer. In VS Code, 
 
 The open and convert commands are also available from the Explorer context menu for `.sas7bdat` and `.xpt` files.
 
+## Development
+
+```sh
+npm run typecheck   # types across src, tests and configs
+npm run lint        # eslint, type-aware rules
+npm test            # vitest, once
+npm run test:watch  # vitest, watch mode
+npm run check       # all three, in order
+```
+
+Tests run outside the extension host, so `vscode` is aliased to an in-memory
+stub at `src/test/__mocks__/vscode.ts`. It implements enough of `Uri` and
+`workspace.fs` for the cache and converter layers to be exercised directly.
+
 ## Packaging
 
 Build the extension before packaging:

@@ -11,6 +11,14 @@
     "strict": true,
     "moduleResolution": "Node16",
     "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "skipLibCheck": true,
     "types": [
       "node",
@@ -18,10 +26,14 @@
     ]
   },
   "include": [
-    "src"
+    "src/**/*.ts"
   ],
   "exclude": [
     "node_modules",
-    ".vscode-test"
+    ".vsce-test",
+    ".vscode-test",
+    "out",
+    "src/**/*.test.ts",
+    "src/test/**"
   ]
 }
