@@ -6,3 +6,4 @@ coverage/
 .vscode-test/
 *.vsix
 cdx-icon-source.png
+.DS_Store

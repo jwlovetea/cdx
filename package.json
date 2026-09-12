@@ -22,6 +22,8 @@
     "onCommand:cdx.openClinicalDataset",
     "onCommand:cdx.convertClinicalDatasetToParquet",
     "onCommand:cdx.clearCache",
+    "onCommand:cdx.openCacheFolder",
+    "onCommand:cdx.showLog",
     "onCustomEditor:cdx.clinicalDatasetPreview"
   ],
   "main": "./dist/extension.js",
@@ -38,6 +40,14 @@
       {
         "command": "cdx.clearCache",
         "title": "CDX: Clear CDX Cache"
+      },
+      {
+        "command": "cdx.openCacheFolder",
+        "title": "CDX: Open Cache Folder"
+      },
+      {
+        "command": "cdx.showLog",
+        "title": "CDX: Show Log"
       }
     ],
     "menus": {
@@ -62,6 +72,12 @@
         },
         {
           "command": "cdx.clearCache"
+        },
+        {
+          "command": "cdx.openCacheFolder"
+        },
+        {
+          "command": "cdx.showLog"
         }
       ]
     },

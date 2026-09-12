@@ -11,12 +11,21 @@ const { state, FakeInstance } = vi.hoisted(() => {
     public interrupts = 0;
     public closed = false;
     public installed = false;
+    public failInstall = false;
+    public failLoad = false;
 
     public async run(sql: string): Promise<void> {
       this.statements.push(sql);
 
       if (sql.includes('INSTALL')) {
+        if (this.failInstall) {
+          throw new Error('HTTP Error: Unable to download extension');
+        }
         this.installed = true;
+      }
+
+      if (sql.startsWith('LOAD') && this.failLoad) {
+        throw new Error('Extension not found');
       }
     }
 
@@ -52,7 +61,9 @@ const { state, FakeInstance } = vi.hoisted(() => {
       instances: [] as FakeInstance[],
       opens: 0,
       failNextOpen: false,
-      startInstalled: false
+      startInstalled: false,
+      failInstall: false,
+      failLoad: false
     },
     FakeInstance
   };
@@ -70,6 +81,8 @@ vi.mock('@duckdb/node-api', () => ({
 
       const instance = new FakeInstance();
       instance.connection.installed = state.startInstalled;
+      instance.connection.failInstall = state.failInstall;
+      instance.connection.failLoad = state.failLoad;
       state.instances.push(instance);
 
       return instance;
@@ -124,6 +137,8 @@ describe('DuckDbService', () => {
     state.opens = 0;
     state.failNextOpen = false;
     state.startInstalled = false;
+    state.failInstall = false;
+    state.failLoad = false;
   });
 
   describe('getSession', () => {
@@ -162,6 +177,22 @@ describe('DuckDbService', () => {
 
       expect(statements.some((sql) => sql.includes('INSTALL'))).toBe(false);
       expect(statements.some((sql) => sql === 'LOAD read_stat')).toBe(true);
+    });
+
+    it('surfaces a friendly error when read_stat cannot be downloaded', async () => {
+      state.failInstall = true;
+
+      await expect(new DuckDbService().getSession()).rejects.toThrow(
+        /could not load DuckDB’s read_stat extension.*network access/s
+      );
+    });
+
+    it('surfaces a friendly error when read_stat cannot be loaded', async () => {
+      state.failLoad = true;
+
+      await expect(new DuckDbService().getSession()).rejects.toThrow(
+        /could not load DuckDB’s read_stat extension/s
+      );
     });
 
     it('does not memoise a failed open', async () => {

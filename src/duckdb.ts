@@ -3,6 +3,7 @@
 import type { DuckDBConnection, DuckDBInstance } from '@duckdb/node-api';
 import type * as vscode from 'vscode';
 import { duckdbStringLiteral } from './duckdbSql';
+import { CdxError } from './errors';
 
 const READ_STAT_EXTENSION = 'read_stat';
 
@@ -199,11 +200,22 @@ function toColumnCount(value: unknown): number {
 }
 
 async function loadReadStat(connection: DuckDBConnection): Promise<void> {
-  if (!(await isReadStatInstalled(connection))) {
-    await connection.run(`INSTALL ${READ_STAT_EXTENSION} FROM community`);
-  }
+  try {
+    if (!(await isReadStatInstalled(connection))) {
+      await connection.run(`INSTALL ${READ_STAT_EXTENSION} FROM community`);
+    }
 
-  await connection.run(`LOAD ${READ_STAT_EXTENSION}`);
+    await connection.run(`LOAD ${READ_STAT_EXTENSION}`);
+  } catch (error) {
+    // Raw DuckDB errors mention HTTP codes and extension repos; users need
+    // to know this is a network install of a community extension.
+    throw new CdxError(
+      'CDX could not load DuckDB’s read_stat extension. ' +
+        'The first run downloads it from the community repository and needs network access. ' +
+        'Check your connection or proxy, then try again. See the CDX log for details.',
+      { cause: error }
+    );
+  }
 }
 
 /**

@@ -1,6 +1,6 @@
 import { inPositron } from '@posit-dev/positron';
 import * as vscode from 'vscode';
-import { clearCacheDirectory, toFileUri } from './cache';
+import { clearCacheDirectory, ensureCacheDirectory, getCacheDirectoryUri, toFileUri } from './cache';
 import { detectClinicalDatasetFormat } from './clinicalDataset';
 import { ClinicalDatasetConverter } from './converter';
 import { DuckDbService } from './duckdb';
@@ -12,6 +12,7 @@ const COMMAND_OPEN = 'cdx.openClinicalDataset';
 const COMMAND_CONVERT = 'cdx.convertClinicalDatasetToParquet';
 const COMMAND_CLEAR_CACHE = 'cdx.clearCache';
 const COMMAND_SHOW_LOG = 'cdx.showLog';
+const COMMAND_OPEN_CACHE = 'cdx.openCacheFolder';
 
 const OPEN_DIALOG_FILTERS: vscode.OpenDialogOptions['filters'] = {
   'Clinical datasets': ['sas7bdat', 'xpt']
@@ -69,6 +70,10 @@ export function activate(context: vscode.ExtensionContext): void {
     registerCommand(COMMAND_CLEAR_CACHE, async () => {
       await clearCacheDirectory(context);
       void vscode.window.showInformationMessage('CDX cache cleared.');
+    }),
+    registerCommand(COMMAND_OPEN_CACHE, async () => {
+      await ensureCacheDirectory(context);
+      await vscode.commands.executeCommand('revealFileInOS', getCacheDirectoryUri(context));
     }),
     vscode.window.registerCustomEditorProvider('cdx.clinicalDatasetPreview', previewProvider, {
       supportsMultipleEditorsPerDocument: false

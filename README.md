@@ -9,6 +9,8 @@ In Positron, Parquet files are handled by the native Data Explorer. In VS Code, 
 - `CDX: Open Clinical Dataset`
 - `CDX: Convert Clinical Dataset to Parquet`
 - `CDX: Clear CDX Cache`
+- `CDX: Open Cache Folder`
+- `CDX: Show Log`
 
 The open and convert commands are also available from the Explorer context menu for `.sas7bdat` and `.xpt` files.
 
@@ -104,7 +106,12 @@ INSTALL read_stat FROM community;
 LOAD read_stat;
 ```
 
-That first run may need network access. Converted Parquet files are cached under
+That first run may need network access. If install fails, CDX reports a
+clear error asking you to check connectivity instead of a raw DuckDB HTTP message.
+
+Converted Parquet files are cached under
 the extension global storage as `parquet/<source-path-hash>/<FriendlyName>.parquet`
 with a `source-meta.json` sidecar. Opening the Parquet through `vscode.open`
 lets Positron route `*.parquet` into its built-in Data Explorer.
+
+Use `CDX: Open Cache Folder` to reveal that directory in Finder/Explorer.
