@@ -213,8 +213,45 @@ export const workspace = {
       entries.set(to, entry);
     },
 
+    async readDirectory(uri: Uri): Promise<[string, FileType][]> {
+      const prefix = `${normalise(uri)}/`;
+      const names = new Map<string, FileType>();
+
+      for (const key of entries.keys()) {
+        if (!key.startsWith(prefix)) {
+          continue;
+        }
+
+        const rest = key.slice(prefix.length);
+        if (rest.length === 0) {
+          continue;
+        }
+
+        const slash = rest.indexOf('/');
+        if (slash === -1) {
+          const entry = entries.get(key);
+          names.set(rest, entry?.kind === 'directory' ? FileType.Directory : FileType.File);
+        } else {
+          // Intermediate path segment: seedFile only stores leaves, so
+          // synthesise parent directories from nested paths.
+          names.set(rest.slice(0, slash), FileType.Directory);
+        }
+      }
+
+      return [...names.entries()].sort(([a], [b]) => a.localeCompare(b));
+    },
+
     async writeFile(uri: Uri, content: Uint8Array): Promise<void> {
       entries.set(normalise(uri), { kind: 'file', content, mtime: Date.now() });
+    },
+
+    async readFile(uri: Uri): Promise<Uint8Array> {
+      const entry = entries.get(normalise(uri));
+      if (!entry || entry.kind !== 'file') {
+        throw FileSystemError.FileNotFound(uri.fsPath);
+      }
+
+      return entry.content;
     }
   }
 };

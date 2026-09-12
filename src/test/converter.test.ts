@@ -149,10 +149,10 @@ describe('ClinicalDatasetConverter', () => {
     converter = createConverter(duckDb);
   });
 
-  it('converts a dataset and returns the cached parquet path', async () => {
+  it('converts a dataset and returns a friendly cached parquet path', async () => {
     const parquetUri = await converter.convert(vscode.Uri.file(SOURCE));
 
-    expect(parquetUri.fsPath).toMatch(/^\/storage\/parquet\/adsl-[0-9a-f]{16}\.parquet$/);
+    expect(parquetUri.fsPath).toMatch(/^\/storage\/parquet\/[0-9a-f]{16}\/adsl\.parquet$/);
     expect(listPaths()).toContain(parquetUri.fsPath);
   });
 
@@ -176,6 +176,17 @@ describe('ClinicalDatasetConverter', () => {
 
     await converter.convert(vscode.Uri.file(SOURCE));
 
+    expect(duckDb.statements).toHaveLength(2);
+  });
+
+  it('regenerates in place when the source changes', async () => {
+    const first = await converter.convert(vscode.Uri.file(SOURCE));
+    seedFile(SOURCE, 'source bytes v2', 2_000);
+
+    const second = await converter.convert(vscode.Uri.file(SOURCE));
+
+    expect(second.fsPath).toBe(first.fsPath);
+    expect(listPaths()).toContain(second.fsPath);
     expect(duckDb.statements).toHaveLength(2);
   });
 
@@ -278,7 +289,7 @@ describe('ClinicalDatasetConverter', () => {
 
     const leftovers = listPaths().filter((path) => path.endsWith('.tmp'));
     expect(leftovers).toEqual([]);
-    expect(listPaths().filter((path) => path.includes('/storage/parquet/adsl-'))).toEqual([]);
+    expect(listPaths().filter((path) => path.endsWith('adsl.parquet'))).toEqual([]);
   });
 
   it('invalidates the DuckDB session after a failed statement', async () => {
@@ -303,7 +314,7 @@ describe('ClinicalDatasetConverter', () => {
     seedFile(SOURCE, 'changed bytes', 9_000);
     const after = await converter.convert(vscode.Uri.file(SOURCE));
 
-    expect(after.toString()).not.toBe(before.toString());
+    expect(after.toString()).toBe(before.toString());
     expect(duckDb.statements).toHaveLength(2);
   });
 

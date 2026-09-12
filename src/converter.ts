@@ -1,7 +1,14 @@
 import { randomBytes } from 'node:crypto';
 import { basename } from 'node:path';
 import * as vscode from 'vscode';
-import { ensureCacheDirectory, getCachedParquetUri } from './cache';
+import {
+  ensureCacheDirectory,
+  getCachedParquetUri,
+  getCacheEntryDirectory,
+  isCacheEntryFresh,
+  pruneStaleCacheEntries,
+  writeCacheMeta
+} from './cache';
 import { type ClinicalDatasetFormat, requireClinicalDatasetFormat } from './clinicalDataset';
 import { UNKNOWN_COLUMN_COUNT, type DuckDbService } from './duckdb';
 import { duckdbStringLiteral } from './duckdbSql';
@@ -111,7 +118,9 @@ export class ClinicalDatasetConverter {
     throwIfCancelled(token);
 
     const cachedSize = await fileSize(outputUri);
-    if ((cachedSize ?? 0) > 0) {
+    const fresh = await isCacheEntryFresh(this.#context, sourceUri);
+
+    if (fresh && (cachedSize ?? 0) > 0) {
       const columnCount = await this.#duckDb.countParquetColumns(outputUri.fsPath);
 
       if (columnCount === 0) {
@@ -124,13 +133,21 @@ export class ClinicalDatasetConverter {
         onProgress?.('Cached Parquet file could not be inspected; regenerating it.');
         await deleteQuietly(outputUri);
       }
+    } else if ((cachedSize ?? 0) > 0) {
+      onProgress?.('Source changed; regenerating cached Parquet file.');
     } else {
       onProgress?.('Cached Parquet file is missing or empty; reading with DuckDB read_stat...');
     }
 
+    await vscode.workspace.fs.createDirectory(getCacheEntryDirectory(this.#context, sourceUri));
+
     onProgress?.('Reading with DuckDB read_stat...');
     await this.#writeParquet(sourceUri, outputUri, format, token);
+    await writeCacheMeta(this.#context, sourceUri);
     onProgress?.('Parquet file ready.');
+
+    // Drop legacy flat cache files and orphaned .tmp writes.
+    await pruneStaleCacheEntries(this.#context);
 
     return outputUri;
   }

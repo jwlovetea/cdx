@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { createCacheFileName, createCacheKey, sanitizeBaseName } from '../cacheUtils';
+import {
+  createCacheFileName,
+  createCacheKey,
+  createSourceCacheDirectoryName,
+  sanitizeBaseName
+} from '../cacheUtils';
 
 const SOURCE = {
   sourcePath: '/study/adam/adsl.sas7bdat',
@@ -38,16 +43,32 @@ describe('createCacheKey', () => {
   });
 });
 
-describe('createCacheFileName', () => {
-  it('sanitises the base name and appends a hash prefix', () => {
-    expect(createCacheFileName('/study/adam/ad sl.sas7bdat', '0123456789abcdef0123')).toBe(
-      'ad_sl-0123456789abcdef.parquet'
+describe('createSourceCacheDirectoryName', () => {
+  it('is stable for the same path and ignores content metadata', () => {
+    expect(createSourceCacheDirectoryName(SOURCE.sourcePath)).toBe(
+      createSourceCacheDirectoryName(SOURCE.sourcePath)
     );
+  });
+
+  it('differs for different source paths', () => {
+    expect(createSourceCacheDirectoryName('/study/adam/adsl.sas7bdat')).not.toBe(
+      createSourceCacheDirectoryName('/study/adam/ae.sas7bdat')
+    );
+  });
+
+  it('is a short hex folder name', () => {
+    expect(createSourceCacheDirectoryName(SOURCE.sourcePath)).toMatch(/^[0-9a-f]{16}$/);
+  });
+});
+
+describe('createCacheFileName', () => {
+  it('keeps a friendly basename without a hash suffix', () => {
+    expect(createCacheFileName('/study/adam/ad sl.sas7bdat')).toBe('ad_sl.parquet');
   });
 
   it('keeps the total length inside the usual 255 byte component limit', () => {
     const longName = `${'a'.repeat(500)}.sas7bdat`;
-    const fileName = createCacheFileName(`/study/${longName}`, 'f'.repeat(64));
+    const fileName = createCacheFileName(`/study/${longName}`);
 
     expect(fileName.length).toBeLessThanOrEqual(255);
   });

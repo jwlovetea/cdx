@@ -264,24 +264,16 @@ function noop(): void {
 /**
  * Custom editor shown for `.sas7bdat` and `.xpt` files.
  *
- * The first time a document is previewed, the dataset is converted and the
- * Parquet result replaces this placeholder. Later openings show a button
- * instead, so clicking the source file does not silently trigger another
- * conversion every time.
+ * Always converts and opens the cached Parquet (cache hit is nearly free),
+ * then closes this tab so the Data Explorer takes its place. A short loading
+ * state covers the first DuckDB load; failures leave a retryable error page.
+ * There is deliberately no "click to open" idle screen — that made every
+ * reopen feel like an extra step.
  */
 class ClinicalDatasetPreviewProvider
   implements vscode.CustomReadonlyEditorProvider<ClinicalDatasetDocument>, vscode.Disposable
 {
   readonly #converter: ClinicalDatasetConverter;
-
-  /**
-   * Documents already auto-opened this session.
-   *
-   * Deliberately kept for the whole session rather than cleared when a document
-   * closes: re-opening a source file should show the button, not convert again.
-   * It only ever holds one entry per distinct file the user has opened.
-   */
-  readonly #autoOpened = new Set<string>();
   readonly #listeners = new Set<vscode.Disposable>();
 
   public constructor(converter: ClinicalDatasetConverter) {
@@ -309,7 +301,7 @@ class ClinicalDatasetPreviewProvider
         return;
       }
 
-      void this.#openDataset(document.uri, webviewPanel);
+      void this.#openDataset(document.uri, webviewPanel, { closeOnSuccess: true });
     });
 
     this.#listeners.add(listener);
@@ -318,28 +310,8 @@ class ClinicalDatasetPreviewProvider
       this.#listeners.delete(listener);
     });
 
-    const documentKey = document.uri.toString();
-    logInfo(`resolveCustomEditor: ${documentKey}`);
-
-    try {
-      if (this.#autoOpened.has(documentKey)) {
-        webviewPanel.webview.html = renderPreviewHtml(webviewPanel.webview);
-        logInfo('  already auto-opened this session; showing the placeholder');
-        return;
-      }
-
-      this.#autoOpened.add(documentKey);
-      await this.#openDataset(document.uri, webviewPanel, { closeOnSuccess: true });
-    } catch (error) {
-      logError(`resolveCustomEditor ${documentKey}`, error);
-      webviewPanel.webview.html = renderPreviewHtml(webviewPanel.webview, {
-        kind: 'error',
-        message: formatError(error)
-      });
-      if (!isCancellation(error)) {
-        void vscode.window.showErrorMessage(formatError(error));
-      }
-    }
+    logInfo(`resolveCustomEditor: ${document.uri.toString()}`);
+    await this.#openDataset(document.uri, webviewPanel, { closeOnSuccess: true });
   }
 
   public dispose(): void {
@@ -348,7 +320,6 @@ class ClinicalDatasetPreviewProvider
     }
 
     this.#listeners.clear();
-    this.#autoOpened.clear();
   }
 
   /**

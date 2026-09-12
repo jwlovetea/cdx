@@ -19,12 +19,9 @@ const LOADING_MESSAGE = 'Converting with DuckDB read_stat...';
 /**
  * Renders the custom-editor placeholder.
  *
- * The nonce is generated here rather than passed in so the value embedded in
- * the script tag can never drift from the one in the content security policy.
- *
- * The host sets `loading` as soon as the editor opens so a conversion in
- * flight never leaves a blank webview, and `error` when conversion fails so
- * the button can be used again instead of looking stuck.
+ * The host always starts in `loading` and closes the tab on success, so the
+ * idle "Open Dataset" state is only a fallback. `error` keeps the file open
+ * with a retry button instead of a blank webview.
  */
 export function renderPreviewHtml(
   webview: vscode.Webview,

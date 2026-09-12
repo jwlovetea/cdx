@@ -11,9 +11,8 @@ export interface CacheInput {
 /**
  * Upper bound for the human readable part of a cache file name.
  *
- * Most file systems cap a single path component at 255 bytes; the remainder is
- * reserved for the `-<hash>.parquet` suffix appended by
- * {@link createCacheFileName}.
+ * Most file systems cap a single path component at 255 bytes; `.parquet` uses
+ * eight more, so leave headroom for that suffix.
  */
 const MAX_BASE_NAME_LENGTH = 200;
 
@@ -64,13 +63,22 @@ export function createCacheKey(input: CacheInput): string {
 }
 
 /**
- * Builds the cache file name for a source dataset.
+ * Directory name that uniquely identifies a source path (not its contents).
  *
- * The name keeps a sanitised copy of the source base name for debuggability and
- * appends a hash prefix to keep entries unique.
+ * Stable across edits, so a converted file can keep a friendly basename and be
+ * overwritten in place when the source changes.
  */
-export function createCacheFileName(sourcePath: string, cacheKey: string): string {
-  return `${sanitizeBaseName(sourcePath)}-${cacheKey.slice(0, 16)}.parquet`;
+export function createSourceCacheDirectoryName(sourcePath: string): string {
+  return createHash('sha256').update(sourcePath).digest('hex').slice(0, 16);
+}
+
+/**
+ * Cache file name for a source dataset: just the sanitised base name plus
+ * `.parquet`. Data Explorer shows this as the tab title, so a long hash suffix
+ * would read as `Longname-58d1d47221ce65a0.p...` instead of `Longname.parquet`.
+ */
+export function createCacheFileName(sourcePath: string): string {
+  return `${sanitizeBaseName(sourcePath)}.parquet`;
 }
 
 /**

@@ -1,6 +1,12 @@
 import * as vscode from 'vscode';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { clearCacheDirectory, ensureCacheDirectory, getCacheDirectoryUri, getCachedParquetUri } from '../cache';
+import {
+  clearCacheDirectory,
+  ensureCacheDirectory,
+  getCacheDirectoryUri,
+  getCachedParquetUri,
+  pruneStaleCacheEntries
+} from '../cache';
 import { CdxError } from '../errors';
 import { listPaths, resetFileSystem, seedFile } from './__mocks__/vscode';
 
@@ -55,7 +61,7 @@ describe('cache', () => {
   });
 
   describe('getCachedParquetUri', () => {
-    it('returns a stable path for unchanged metadata', async () => {
+    it('returns a stable friendly path for the same source path', async () => {
       const context = createContext();
       const first = await getCachedParquetUri(context, vscode.Uri.file(SOURCE));
       const second = await getCachedParquetUri(context, vscode.Uri.file(SOURCE));
@@ -63,26 +69,58 @@ describe('cache', () => {
       expect(first.toString()).toBe(second.toString());
     });
 
-    it('returns a different path when the source is modified', async () => {
+    it('keeps the same path when the source content changes', async () => {
+      // Freshness is tracked in a sidecar meta file, not in the file name,
+      // so Data Explorer always shows `adsl.parquet`.
       const context = createContext();
       const before = await getCachedParquetUri(context, vscode.Uri.file(SOURCE));
 
       seedFile(SOURCE, 'dataset but newer', 2_000);
       const after = await getCachedParquetUri(context, vscode.Uri.file(SOURCE));
 
-      expect(after.toString()).not.toBe(before.toString());
+      expect(after.toString()).toBe(before.toString());
     });
 
-    it('names the file after the source dataset', async () => {
+    it('names the file after the source dataset without a hash suffix', async () => {
       const uri = await getCachedParquetUri(createContext(), vscode.Uri.file(SOURCE));
 
-      expect(uri.fsPath).toMatch(/^\/storage\/parquet\/adsl-[0-9a-f]{16}\.parquet$/);
+      expect(uri.fsPath).toMatch(/^\/storage\/parquet\/[0-9a-f]{16}\/adsl\.parquet$/);
     });
 
     it('throws a user-facing error when the source is missing', async () => {
       await expect(
         getCachedParquetUri(createContext(), vscode.Uri.file('/study/missing.sas7bdat'))
       ).rejects.toThrow(CdxError);
+    });
+  });
+
+  describe('pruneStaleCacheEntries', () => {
+    it('removes legacy flat cache files at the cache root', async () => {
+      const context = createContext();
+      await ensureCacheDirectory(context);
+      seedFile('/storage/parquet/adsl-bbbbbbbbbbbbbbbb.parquet', 'old layout');
+
+      await pruneStaleCacheEntries(context);
+
+      expect(listPaths()).not.toContain('/storage/parquet/adsl-bbbbbbbbbbbbbbbb.parquet');
+    });
+
+    it('removes orphaned temporary write files inside a source folder', async () => {
+      const context = createContext();
+      await ensureCacheDirectory(context);
+      seedFile('/storage/parquet/aaaaaaaaaaaaaaaa/adsl.parquet', 'new');
+      seedFile('/storage/parquet/aaaaaaaaaaaaaaaa/adsl.parquet.deadbeef.tmp', 'partial');
+
+      await pruneStaleCacheEntries(context);
+
+      expect(listPaths()).not.toContain(
+        '/storage/parquet/aaaaaaaaaaaaaaaa/adsl.parquet.deadbeef.tmp'
+      );
+      expect(listPaths()).toContain('/storage/parquet/aaaaaaaaaaaaaaaa/adsl.parquet');
+    });
+
+    it('is a no-op when the cache directory does not exist', async () => {
+      await expect(pruneStaleCacheEntries(createContext())).resolves.toBeUndefined();
     });
   });
 

@@ -15,3 +15,11 @@ vitest.config.mts
 eslint.config.mjs
 package-lock.json
 out/.stale/**
+
+# Runtime does not need source maps, type declarations, or package docs.
+**/*.map
+**/*.d.ts
+node_modules/**/README.md
+node_modules/**/README
+node_modules/**/readme.md
+node_modules/@types/**
