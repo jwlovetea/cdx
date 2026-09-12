@@ -1,8 +1,11 @@
 src
 test
-out/test
+testdata
+scripts
+out
 .vscode
 .workbuddy-ai
+.github
 coverage
 *.vsix
 *.ts
@@ -15,6 +18,7 @@ vitest.config.mts
 eslint.config.mjs
 package-lock.json
 out/.stale/**
+esbuild.js
 
 # Runtime does not need source maps, type declarations, or package docs.
 **/*.map

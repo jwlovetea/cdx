@@ -75,7 +75,7 @@ export function createSourceCacheDirectoryName(sourcePath: string): string {
 /**
  * Cache file name for a source dataset: just the sanitised base name plus
  * `.parquet`. Data Explorer shows this as the tab title, so a long hash suffix
- * would read as `Longname-58d1d47221ce65a0.p...` instead of `Longname.parquet`.
+ * would read as `adsl-58d1d47221ce65a0.p...` instead of `adsl.parquet`.
  */
 export function createCacheFileName(sourcePath: string): string {
   return `${sanitizeBaseName(sourcePath)}.parquet`;

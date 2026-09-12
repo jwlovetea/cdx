@@ -19,12 +19,21 @@ npm run typecheck   # types across src, tests and configs
 npm run lint        # eslint, type-aware rules
 npm test            # vitest, once
 npm run test:watch  # vitest, watch mode
-npm run check       # all three, in order
+npm run check       # typecheck + lint + unit tests
+npm run compile     # tsc -> out/
+npm run smoke       # real DuckDB convert of testdata/ (after compile)
 ```
 
 Tests run outside the extension host, so `vscode` is aliased to an in-memory
 stub at `src/test/__mocks__/vscode.ts`. It implements enough of `Uri` and
 `workspace.fs` for the cache and converter layers to be exercised directly.
+
+`npm run smoke` is the headless end-to-end check: it loads the compiled
+`out/` modules with a `vscode` stub (`scripts/vscode-stub.cjs`) and converts
+`testdata/adsl.sas7bdat` with real DuckDB `read_stat`. That catches native
+binding, install, and cache-write regressions unit tests cannot see.
+
+Sample clinical files live in `testdata/` and are not shipped in the VSIX.
 
 ## Layout
 
@@ -46,10 +55,12 @@ interrupts the running `COPY` rather than waiting for it to finish.
 
 ## Packaging
 
-Build the extension before packaging:
+`vsce package` runs `vscode:prepublish`, which compiles TypeScript to `out/`
+(for smoke tests) and bundles `src/extension.ts` to `dist/extension.js` via
+esbuild. `vscode`, `@duckdb/*`, and `@posit-dev/positron` stay external so
+native bindings and host APIs remain real modules.
 
 ```sh
-npm run compile
 npx @vscode/vsce package
 ```
 
@@ -57,6 +68,10 @@ The VSIX must include `node_modules/@duckdb` and `node_modules/@posit-dev`; CDX 
 
 Packaging only ships the binding for the platform it runs on. Package on
 each platform you intend to support.
+
+CI (`.github/workflows/ci.yml`) runs typecheck/lint/unit tests, a real DuckDB
+smoke conversion of `testdata/adsl.sas7bdat`, and `vsce package` on
+macOS and Ubuntu.
 
 ### `vsce package` fails with `ELSPROBLEMS`
 
@@ -89,4 +104,7 @@ INSTALL read_stat FROM community;
 LOAD read_stat;
 ```
 
-That first run may need network access. Converted Parquet files are cached in the extension global storage directory and regenerated when the source path, modified time, or size changes.
+That first run may need network access. Converted Parquet files are cached under
+the extension global storage as `parquet/<source-path-hash>/<FriendlyName>.parquet`
+with a `source-meta.json` sidecar. Opening the Parquet through `vscode.open`
+lets Positron route `*.parquet` into its built-in Data Explorer.

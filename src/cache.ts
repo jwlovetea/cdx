@@ -58,7 +58,7 @@ export function getCacheEntryDirectory(
  *
  * Layout is `parquet/<source-path-hash>/<FriendlyName>.parquet`. The folder
  * keeps distinct source paths apart; the file name stays human-readable so
- * Data Explorer titles read `Longname.parquet` rather than a hash suffix.
+ * Data Explorer titles read `adsl.parquet` rather than a hash suffix.
  *
  * This is a pure computation: it reads the source file metadata but does not
  * create anything. Callers that are about to write must call

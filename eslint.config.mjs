@@ -6,7 +6,16 @@ export default tseslint.config(
   {
     // `eslint.config.mjs` is tooling rather than source: TypeScript cannot add it
     // to a project without `allowJs`, so it is not type-checked or linted.
-    ignores: ['out/**', 'node_modules/**', '.vscode-test/**', '**/*.vsix', 'eslint.config.mjs']
+    ignores: [
+      'out/**',
+      'dist/**',
+      'node_modules/**',
+      '.vscode-test/**',
+      '**/*.vsix',
+      'eslint.config.mjs',
+      'esbuild.js',
+      'scripts/**'
+    ]
   },
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,

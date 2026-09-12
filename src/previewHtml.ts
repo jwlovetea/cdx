@@ -80,11 +80,27 @@ export function renderPreviewHtml(
     .loading {
       color: var(--vscode-descriptionForeground);
     }
+    .spinner {
+      animation: cdx-spin 0.9s linear infinite;
+      border: 2px solid var(--vscode-widget-border, rgba(127, 127, 127, 0.35));
+      border-radius: 50%;
+      border-top-color: var(--vscode-progressBar-background, #0e70c0);
+      display: ${state.kind === 'loading' ? 'block' : 'none'};
+      height: 22px;
+      margin-bottom: 4px;
+      width: 22px;
+    }
+    @keyframes cdx-spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
   </style>
 </head>
 <body>
   <main>
     <h1>Clinical Data Explorer</h1>
+    <div class="spinner" aria-hidden="true"></div>
     <p id="status"${state.kind === 'error' ? ' class="error"' : state.kind === 'loading' ? ' class="loading"' : ''}>${escapeHtml(statusMessage)}</p>
     ${showButton ? `<button id="open"${buttonDisabled ? ' disabled' : ''}>${buttonLabel}</button>` : ''}
   </main>
@@ -92,12 +108,16 @@ export function renderPreviewHtml(
     const vscode = acquireVsCodeApi();
     const button = document.getElementById('open');
     const status = document.getElementById('status');
+    const spinner = document.querySelector('.spinner');
     if (button) {
       button.addEventListener('click', () => {
         button.disabled = true;
         status.classList.remove('error');
         status.classList.add('loading');
         status.textContent = ${JSON.stringify(LOADING_MESSAGE)};
+        if (spinner) {
+          spinner.style.display = 'block';
+        }
         vscode.postMessage({ command: 'open' });
       });
     }

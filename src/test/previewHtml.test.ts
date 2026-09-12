@@ -53,6 +53,15 @@ describe('renderPreviewHtml', () => {
 
     expect(html).toContain('Preparing clinical dataset...');
     expect(html).not.toContain('id="open"');
+    expect(html).toContain('cdx-spin');
+    expect(html).toMatch(/\.spinner\s*\{[^}]*display:\s*block/);
+  });
+
+  it('hides the spinner when idle or in error state', () => {
+    expect(renderPreviewHtml(createWebview())).toMatch(/\.spinner\s*\{[^}]*display:\s*none/);
+    expect(
+      renderPreviewHtml(createWebview(), { kind: 'error', message: 'boom' })
+    ).toMatch(/\.spinner\s*\{[^}]*display:\s*none/);
   });
 
   it('shows a retryable error message when conversion fails', () => {
