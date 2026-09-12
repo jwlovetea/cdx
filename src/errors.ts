@@ -30,6 +30,21 @@ export function isCancellation(error: unknown): boolean {
 }
 
 /**
+ * Type guard for DuckDB's interrupt-after-cancel error.
+ *
+ * `connection.interrupt()` rejects the running statement with a generic
+ * engine message, not {@link OperationCancelledError}. Call sites that already
+ * own a cancellation token use this to reclassify the failure as a cancel.
+ */
+export function isDuckDbInterrupt(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return /interrupt/i.test(error.message);
+}
+
+/**
  * Renders an unknown thrown value as a single line suitable for a VS Code
  * notification.
  *
@@ -48,15 +63,6 @@ export function formatError(error: unknown, fallback = 'CDX: Operation failed.')
   }
 
   return fallback;
-}
-
-/** Wraps an unknown thrown value as a `CdxError`, preserving the cause. */
-export function toCdxError(error: unknown, message = 'Operation failed.'): CdxError {
-  if (error instanceof CdxError) {
-    return error;
-  }
-
-  return new CdxError(message, { cause: error });
 }
 
 function firstLine(message: string): string {

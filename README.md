@@ -41,13 +41,17 @@ Sample clinical files live in `testdata/` and are not shipped in the VSIX.
 
 | Module | Responsibility |
 | --- | --- |
-| `extension.ts` | Command and custom editor registration; user-facing messaging |
+| `extension.ts` | Activation, status bar, custom editor wiring |
+| `commands.ts` | Command palette / context menu handlers |
+| `openDataset.ts` | Convert-with-progress and open Parquet in the editor |
+| `clinicalDatasetEditor.ts` | Custom editor for `.sas7bdat` / `.xpt` |
 | `converter.ts` | Cache reuse, in-flight de-duplication, atomic writes, cancellation |
 | `duckdb.ts` | Owns the shared DuckDB database and the `read_stat` extension |
 | `duckdbSql.ts` | SQL literal and identifier quoting |
 | `cache.ts` / `cacheUtils.ts` | Cache paths, keys and file name sanitising |
 | `workspaceFs.ts` | Exception-based `workspace.fs` calls as explicit results |
 | `errors.ts` | Error types; deliberately free of any `vscode` import |
+| `previewHtml.ts` | Loading / error placeholder webview |
 
 DuckDB is started once per activation and reused, because opening it and
 resolving `read_stat` costs hundreds of milliseconds. Conversions write to a
@@ -115,3 +119,17 @@ with a `source-meta.json` sidecar. Opening the Parquet through `vscode.open`
 lets Positron route `*.parquet` into its built-in Data Explorer.
 
 Use `CDX: Open Cache Folder` to reveal that directory in Finder/Explorer.
+`CDX: Clear CDX Cache` asks for confirmation before deleting.
+
+## Install size
+
+The extension is ~100 MB installed because it bundles DuckDB’s native
+engine (`libduckdb.dylib` on macOS). The TypeScript entrypoint is only a
+few dozen kilobytes; almost all of the size is the embedded database
+required to run `read_stat` offline after the first extension install.
+
+## Untrusted workspaces
+
+CDX declares `untrustedWorkspaces: unsupported`. It loads a native library
+and reads clinical files from disk, so it does not activate in untrusted
+workspaces.

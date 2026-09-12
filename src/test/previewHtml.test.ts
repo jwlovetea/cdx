@@ -74,4 +74,13 @@ describe('renderPreviewHtml', () => {
     expect(html).toContain('Try Again');
     expect(html).toContain('id="open"');
   });
+
+  it('announces loading and error status to assistive technology', () => {
+    const loading = renderPreviewHtml(createWebview(), { kind: 'loading' });
+    const error = renderPreviewHtml(createWebview(), { kind: 'error', message: 'fail' });
+
+    expect(loading).toContain('aria-live="polite"');
+    expect(loading).toContain('role="status"');
+    expect(error).toContain('aria-live="polite"');
+  });
 });

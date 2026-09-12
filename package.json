@@ -14,6 +14,12 @@
     "vscode": "^1.74.0",
     "positron": "^2026.06.1"
   },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "CDX runs native DuckDB and reads clinical datasets from disk; it does not start in untrusted workspaces."
+    }
+  },
   "categories": [
     "Data Science",
     "Other"

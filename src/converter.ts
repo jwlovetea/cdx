@@ -12,7 +12,7 @@ import {
 import { type ClinicalDatasetFormat, requireClinicalDatasetFormat } from './clinicalDataset';
 import { UNKNOWN_COLUMN_COUNT, type DuckDbService } from './duckdb';
 import { duckdbStringLiteral } from './duckdbSql';
-import { CdxError, OperationCancelledError } from './errors';
+import { CdxError, isDuckDbInterrupt, OperationCancelledError } from './errors';
 import { deleteQuietly, fileSize } from './workspaceFs';
 
 /** Reports human-readable conversion progress to the caller. */
@@ -182,6 +182,17 @@ export class ClinicalDatasetConverter {
       await vscode.workspace.fs.rename(tempUri, outputUri, { overwrite: true });
     } catch (error) {
       await deleteQuietly(tempUri);
+
+      // A user cancel reaches DuckDB as interrupt(), which rejects with a
+      // generic engine error. When a token was supplied, treat that as a
+      // cancel so the UI stays silent instead of showing "conversion failed".
+      if (token && isDuckDbInterrupt(error)) {
+        throw new OperationCancelledError('CDX conversion was cancelled.');
+      }
+
+      // A failed statement can leave the database unusable, so force the next
+      // conversion to start from a clean one.
+      this.#duckDb.invalidate();
       throw error;
     } finally {
       cancellation?.dispose();
@@ -195,17 +206,10 @@ export class ClinicalDatasetConverter {
   ): Promise<void> {
     const { connection } = await this.#duckDb.getSession();
 
-    try {
-      await connection.run(
-        `COPY (FROM read_stat(${duckdbStringLiteral(sourceUri.fsPath)}, format = ${duckdbStringLiteral(format)})) ` +
-          `TO ${duckdbStringLiteral(tempUri.fsPath)} (FORMAT PARQUET)`
-      );
-    } catch (error) {
-      // A failed statement can leave the database unusable, so force the next
-      // conversion to start from a clean one.
-      this.#duckDb.invalidate();
-      throw error;
-    }
+    await connection.run(
+      `COPY (FROM read_stat(${duckdbStringLiteral(sourceUri.fsPath)}, format = ${duckdbStringLiteral(format)})) ` +
+        `TO ${duckdbStringLiteral(tempUri.fsPath)} (FORMAT PARQUET)`
+    );
   }
 }
 

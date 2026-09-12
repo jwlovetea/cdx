@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Uri, commands } from './__mocks__/vscode';
-import { openConvertedParquet } from '../extension';
+import { openConvertedParquet } from '../openDataset';
 
 vi.mock('@posit-dev/positron', () => ({
   inPositron: vi.fn(() => true)

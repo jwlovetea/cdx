@@ -92,12 +92,15 @@ export class DuckDbService {
    * already awaiting.
    */
   public interrupt(): void {
-    // Recorded even when a session is live, so a caller that interrupts before
-    // the first conversion is still cancelled if the session is rebuilt.
-    this.#interruptRequested = true;
+    if (this.#live) {
+      // A live session is interrupted immediately. Do not also set the pending
+      // flag: that would interrupt whatever statement runs next on this session.
+      this.#live.connection.interrupt();
+      return;
+    }
 
     // No connection yet: {@link getSession} applies the interrupt on open.
-    this.#live?.connection.interrupt();
+    this.#interruptRequested = true;
   }
 
   /**

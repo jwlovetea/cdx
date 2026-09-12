@@ -101,7 +101,7 @@ export function renderPreviewHtml(
   <main>
     <h1>Clinical Data Explorer</h1>
     <div class="spinner" aria-hidden="true"></div>
-    <p id="status"${state.kind === 'error' ? ' class="error"' : state.kind === 'loading' ? ' class="loading"' : ''}>${escapeHtml(statusMessage)}</p>
+    <p id="status" role="status" aria-live="polite"${state.kind === 'error' ? ' class="error"' : state.kind === 'loading' ? ' class="loading"' : ''}>${escapeHtml(statusMessage)}</p>
     ${showButton ? `<button id="open"${buttonDisabled ? ' disabled' : ''}>${buttonLabel}</button>` : ''}
   </main>
   <script nonce="${nonce}">
@@ -120,6 +120,10 @@ export function renderPreviewHtml(
         }
         vscode.postMessage({ command: 'open' });
       });
+      // After a failed conversion the retry button is the primary action.
+      if (button.textContent === 'Try Again') {
+        button.focus();
+      }
     }
   </script>
 </body>

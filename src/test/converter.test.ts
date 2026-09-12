@@ -103,20 +103,24 @@ function controllableToken(): {
   // `Event<T>` signature, which always passes one.
   let listener: ((event?: unknown) => void) | undefined;
   let disposals = 0;
+  const token = {
+    isCancellationRequested: false,
+    onCancellationRequested: (callback: (event?: unknown) => void): vscode.Disposable => {
+      listener = callback;
+      return {
+        dispose: () => {
+          disposals += 1;
+        }
+      };
+    }
+  } as vscode.CancellationToken;
 
   return {
-    token: {
-      isCancellationRequested: false,
-      onCancellationRequested: (callback: (event?: unknown) => void): vscode.Disposable => {
-        listener = callback;
-        return {
-          dispose: () => {
-            disposals += 1;
-          }
-        };
-      }
+    token,
+    cancel: () => {
+      token.isCancellationRequested = true;
+      listener?.();
     },
-    cancel: () => listener?.(),
     disposeCount: () => disposals
   };
 }
@@ -267,11 +271,13 @@ describe('ClinicalDatasetConverter', () => {
 
     cancel();
 
-    // The rejection comes from DuckDB being interrupted rather than from a
-    // cancellation check, so the converter must still clean up after it.
-    await expect(conversion).rejects.toThrow('Query was interrupted');
+    // DuckDB rejects with a generic interrupt message; the converter must
+    // reclassify that as a user cancel so the UI stays silent.
+    await expect(conversion).rejects.toThrow(OperationCancelledError);
     expect(duckDb.interrupts).toBe(1);
     expect(listPaths().filter((path) => path.endsWith('.tmp'))).toEqual([]);
+    // A cancelled run must not tear down the shared DuckDB session.
+    expect(duckDb.invalidations).toBe(0);
   });
 
   it('detaches the cancellation listener once the conversion finishes', async () => {

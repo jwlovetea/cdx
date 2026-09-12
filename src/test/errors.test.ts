@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { CdxError, formatError, isCancellation, OperationCancelledError, toCdxError } from '../errors';
+import {
+  CdxError,
+  formatError,
+  isCancellation,
+  isDuckDbInterrupt,
+  OperationCancelledError
+} from '../errors';
 
 describe('isCancellation', () => {
   it('recognises cancellations', () => {
@@ -10,6 +16,20 @@ describe('isCancellation', () => {
     expect(isCancellation(new CdxError('nope'))).toBe(false);
     expect(isCancellation(new Error('nope'))).toBe(false);
     expect(isCancellation(undefined)).toBe(false);
+  });
+});
+
+describe('isDuckDbInterrupt', () => {
+  it('matches DuckDB interrupt messages', () => {
+    expect(isDuckDbInterrupt(new Error('Query was interrupted'))).toBe(true);
+    expect(isDuckDbInterrupt(new Error('INTERRUPT: query cancelled'))).toBe(true);
+  });
+
+  it('does not match unrelated errors', () => {
+    expect(isDuckDbInterrupt(new Error('read_stat exploded'))).toBe(false);
+    expect(isDuckDbInterrupt(new CdxError('CDX could not load'))).toBe(false);
+    expect(isDuckDbInterrupt('interrupt')).toBe(false);
+    expect(isDuckDbInterrupt(undefined)).toBe(false);
   });
 });
 
@@ -38,21 +58,5 @@ describe('formatError', () => {
 
   it('never leaks a cancellation as a failure message', () => {
     expect(isCancellation(new OperationCancelledError())).toBe(true);
-  });
-});
-
-describe('toCdxError', () => {
-  it('passes an existing CdxError through unchanged', () => {
-    const original = new CdxError('already ours');
-    expect(toCdxError(original)).toBe(original);
-  });
-
-  it('wraps an unknown value and preserves the cause', () => {
-    const cause = new Error('native failure');
-    const wrapped = toCdxError(cause, 'Conversion failed.');
-
-    expect(wrapped).toBeInstanceOf(CdxError);
-    expect(wrapped.message).toBe('Conversion failed.');
-    expect(wrapped.cause).toBe(cause);
   });
 });

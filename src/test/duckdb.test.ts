@@ -269,6 +269,20 @@ describe('DuckDbService', () => {
       expect(latestInstance().connection.interrupts).toBe(1);
     });
 
+    it('does not leave a sticky interrupt flag on a live session', async () => {
+      const service = new DuckDbService();
+      await service.getSession();
+      service.interrupt();
+      expect(latestInstance().connection.interrupts).toBe(1);
+
+      // Re-reading the same session must not apply a leftover pending interrupt.
+      await service.getSession();
+      expect(latestInstance().connection.interrupts).toBe(1);
+
+      service.interrupt();
+      expect(latestInstance().connection.interrupts).toBe(2);
+    });
+
     it('applies as soon as the session opens when cancelled before it exists', async () => {
       // Opening DuckDB can itself be slow, so a cancel can arrive before there
       // is a connection to interrupt. It must not be dropped.
