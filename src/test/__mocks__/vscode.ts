@@ -107,6 +107,16 @@ export class Uri {
     const authority = this.authority ? `//${this.authority}` : '///';
     return `${this.scheme}:${authority}${this.path}`;
   }
+
+  public toJSON(): object {
+    return {
+      scheme: this.scheme,
+      authority: this.authority,
+      path: this.path,
+      query: this.query,
+      fragment: this.fragment
+    };
+  }
 }
 
 type Entry =
@@ -207,4 +217,19 @@ export const workspace = {
       entries.set(normalise(uri), { kind: 'file', content, mtime: Date.now() });
     }
   }
+};
+
+export const window = {
+  createOutputChannel: () => ({
+    appendLine: () => undefined,
+    show: () => undefined,
+    dispose: () => undefined
+  }),
+  showInformationMessage: async () => undefined,
+  showErrorMessage: async () => undefined,
+  showOpenDialog: async () => undefined
+};
+
+export const commands = {
+  executeCommand: async () => undefined
 };

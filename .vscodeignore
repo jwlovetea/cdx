@@ -7,6 +7,8 @@ coverage
 *.vsix
 *.ts
 *.mts
+*.sas7bdat
+*.xpt
 tsconfig.json
 tsconfig.test.json
 vitest.config.mts

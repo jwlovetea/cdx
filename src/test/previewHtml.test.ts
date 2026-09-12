@@ -44,4 +44,25 @@ describe('renderPreviewHtml', () => {
   it('posts the open command back to the extension', () => {
     expect(renderPreviewHtml(createWebview())).toContain("postMessage({ command: 'open' })");
   });
+
+  it('shows a loading message and hides the button while converting', () => {
+    const html = renderPreviewHtml(createWebview(), {
+      kind: 'loading',
+      message: 'Preparing clinical dataset...'
+    });
+
+    expect(html).toContain('Preparing clinical dataset...');
+    expect(html).not.toContain('id="open"');
+  });
+
+  it('shows a retryable error message when conversion fails', () => {
+    const html = renderPreviewHtml(createWebview(), {
+      kind: 'error',
+      message: 'CDX: conversion <failed>'
+    });
+
+    expect(html).toContain('CDX: conversion &lt;failed&gt;');
+    expect(html).toContain('Try Again');
+    expect(html).toContain('id="open"');
+  });
 });

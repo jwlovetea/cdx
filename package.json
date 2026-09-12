@@ -4,6 +4,10 @@
   "description": "Open SAS and XPT clinical datasets in Positron via DuckDB and Parquet.",
   "version": "0.0.2",
   "publisher": "local",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jwlovetea/cdx.git"
+  },
   "license": "MIT",
   "engines": {
     "vscode": "^1.74.0",

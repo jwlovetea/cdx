@@ -4,9 +4,22 @@ import { deleteIfExists, statOrThrow } from './workspaceFs';
 
 const CACHE_DIRECTORY_NAME = 'parquet';
 
-/** Returns the directory where converted Parquet files are cached. */
+/**
+ * Returns the directory where converted Parquet files are cached.
+ *
+ * Always a `file://` URI. Positron can expose `globalStorageUri` as
+ * `vscode-userdata:`, which `workspace.fs` accepts but Data Explorer does not:
+ * opening that URI produces "Unable to resolve filesystem provider with
+ * relative file path 'positron-data-explorer:...vscode-userdata:...'". The
+ * on-disk location is the same, so converting the scheme is enough.
+ */
 export function getCacheDirectoryUri(context: vscode.ExtensionContext): vscode.Uri {
-  return vscode.Uri.joinPath(context.globalStorageUri, CACHE_DIRECTORY_NAME);
+  return toFileUri(vscode.Uri.joinPath(context.globalStorageUri, CACHE_DIRECTORY_NAME));
+}
+
+/** Normalises a URI to `file://`, which DuckDB and Data Explorer both need. */
+export function toFileUri(uri: vscode.Uri): vscode.Uri {
+  return uri.scheme === 'file' ? uri : vscode.Uri.file(uri.fsPath);
 }
 
 /**

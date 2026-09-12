@@ -22,6 +22,23 @@ describe('cache', () => {
     it('places the cache under global storage', () => {
       expect(getCacheDirectoryUri(createContext()).fsPath).toBe('/storage/parquet');
     });
+
+    it('rewrites a vscode-userdata globalStorage URI to file://', () => {
+      // Positron exposes globalStorageUri as vscode-userdata. Data Explorer
+      // cannot open that scheme; DuckDB needs a real filesystem path.
+      const context = {
+        globalStorageUri: vscode.Uri.file(
+          '/Users/hhm/Library/Application Support/Positron/User/globalStorage/local.cdx'
+        ).with({ scheme: 'vscode-userdata' })
+      } as unknown as vscode.ExtensionContext;
+
+      const uri = getCacheDirectoryUri(context);
+
+      expect(uri.scheme).toBe('file');
+      expect(uri.fsPath).toBe(
+        '/Users/hhm/Library/Application Support/Positron/User/globalStorage/local.cdx/parquet'
+      );
+    });
   });
 
   describe('ensureCacheDirectory', () => {

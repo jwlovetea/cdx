@@ -1,6 +1,6 @@
 import { inPositron } from '@posit-dev/positron';
 import * as vscode from 'vscode';
-import { clearCacheDirectory } from './cache';
+import { clearCacheDirectory, toFileUri } from './cache';
 import { detectClinicalDatasetFormat } from './clinicalDataset';
 import { ClinicalDatasetConverter } from './converter';
 import { DuckDbService } from './duckdb';
@@ -45,7 +45,7 @@ export function activate(context: vscode.ExtensionContext): void {
       }
 
       const parquetUri = await convertWithProgress(converter, sourceUri, 'Opening clinical dataset');
-      await vscode.commands.executeCommand('vscode.open', parquetUri);
+      await openConvertedParquet(parquetUri);
 
       if (!inPositron()) {
         void vscode.window.showInformationMessage(
@@ -233,6 +233,30 @@ interface PreviewMessage {
   readonly command?: string;
 }
 
+/**
+ * Opens the converted Parquet through the normal editor service.
+ *
+ * In Positron this is the supported path into Data Explorer: the workbench
+ * already registers a `*.parquet` editor that imports the file via the
+ * built-in `positron-duckdb` backend (`openWithDuckDB` / `open_dataset`).
+ *
+ * Do not call `positron.dataExplorer.open({ providerId: 'positron-duckdb', ... })`
+ * from here. That API is for extensions that register their *own* Data
+ * Explorer RPC handler. Hitting the built-in provider from outside goes
+ * through the generic extension-backend path, which does not send
+ * `open_dataset` and does not use the `duckdb:` dataset-id prefix — so the
+ * explorer opens empty or fails. A bare `vscode.open` is the correct entry.
+ */
+export async function openConvertedParquet(parquetUri: vscode.Uri): Promise<void> {
+  // Force file:// — a vscode-userdata cache URI breaks Positron's Data Explorer.
+  const fileUri = toFileUri(parquetUri);
+  logInfo(`opening converted parquet: ${fileUri.fsPath}`);
+  // `preview: false` pins the tab. Without it, vscode.open can replace the
+  // custom-editor preview slot, and disposing the placeholder then closes the
+  // Data Explorer that just took its place.
+  await vscode.commands.executeCommand('vscode.open', fileUri, { preview: false });
+}
+
 function noop(): void {
   // Intentionally empty.
 }
@@ -273,7 +297,12 @@ class ClinicalDatasetPreviewProvider
     webviewPanel: vscode.WebviewPanel
   ): Promise<void> {
     webviewPanel.webview.options = { enableScripts: true };
-    webviewPanel.webview.html = renderPreviewHtml(webviewPanel.webview);
+    // Always paint something immediately. A blank custom editor while DuckDB
+    // loads is indistinguishable from a failed activation.
+    webviewPanel.webview.html = renderPreviewHtml(webviewPanel.webview, {
+      kind: 'loading',
+      message: 'Preparing clinical dataset...'
+    });
 
     const listener = webviewPanel.webview.onDidReceiveMessage((message: PreviewMessage) => {
       if (message.command !== 'open') {
@@ -292,13 +321,25 @@ class ClinicalDatasetPreviewProvider
     const documentKey = document.uri.toString();
     logInfo(`resolveCustomEditor: ${documentKey}`);
 
-    if (this.#autoOpened.has(documentKey)) {
-      logInfo('  already auto-opened this session; showing the placeholder');
-      return;
-    }
+    try {
+      if (this.#autoOpened.has(documentKey)) {
+        webviewPanel.webview.html = renderPreviewHtml(webviewPanel.webview);
+        logInfo('  already auto-opened this session; showing the placeholder');
+        return;
+      }
 
-    this.#autoOpened.add(documentKey);
-    await this.#openDataset(document.uri, webviewPanel, { closeOnSuccess: true });
+      this.#autoOpened.add(documentKey);
+      await this.#openDataset(document.uri, webviewPanel, { closeOnSuccess: true });
+    } catch (error) {
+      logError(`resolveCustomEditor ${documentKey}`, error);
+      webviewPanel.webview.html = renderPreviewHtml(webviewPanel.webview, {
+        kind: 'error',
+        message: formatError(error)
+      });
+      if (!isCancellation(error)) {
+        void vscode.window.showErrorMessage(formatError(error));
+      }
+    }
   }
 
   public dispose(): void {
@@ -312,7 +353,7 @@ class ClinicalDatasetPreviewProvider
 
   /**
    * Converts and opens the dataset, reporting failures in the notification
-   * area. Cancellations stay silent.
+   * area and in the placeholder. Cancellations stay silent in the UI.
    *
    * When `closeOnSuccess` is set, the placeholder panel is disposed afterwards
    * because the Parquet file takes its place.
@@ -334,15 +375,20 @@ class ClinicalDatasetPreviewProvider
       const size = await statSize(parquetUri);
       logInfo(`opening ${parquetUri.fsPath} (${size} bytes)`);
 
-      await vscode.commands.executeCommand('vscode.open', parquetUri);
+      await openConvertedParquet(parquetUri);
 
       if (options.closeOnSuccess === true) {
         webviewPanel.dispose();
       }
     } catch (error) {
       // Cancellations stay silent in the UI, but they are exactly the case
-      // that looks like "no data", so they go to the log.
+      // that looks like "no data", so they go to the log. Failures leave a
+      // retryable placeholder instead of a blank webview.
       logError(`openDataset ${sourceUri.fsPath}`, error);
+      webviewPanel.webview.html = renderPreviewHtml(webviewPanel.webview, {
+        kind: 'error',
+        message: formatError(error)
+      });
 
       if (!isCancellation(error)) {
         void vscode.window.showErrorMessage(formatError(error));
