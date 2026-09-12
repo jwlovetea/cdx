@@ -23,3 +23,5 @@ node_modules/**/README.md
 node_modules/**/README
 node_modules/**/readme.md
 node_modules/@types/**
+
+cdx-icon-source.png
