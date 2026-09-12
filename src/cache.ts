@@ -180,6 +180,97 @@ async function pruneTempFilesIn(directoryUri: vscode.Uri): Promise<void> {
   }
 }
 
+/**
+ * Deletes oldest source cache folders until the cache fits `maxBytes`.
+ *
+ * `maxBytes <= 0` disables the cap. `keepDirectoryName` (the entry just
+ * written) is never deleted, even if a single file exceeds the budget.
+ */
+export async function enforceCacheBudget(
+  context: vscode.ExtensionContext,
+  maxBytes: number,
+  keepDirectoryName?: string
+): Promise<void> {
+  if (maxBytes <= 0) {
+    return;
+  }
+
+  const cacheDirectory = getCacheDirectoryUri(context);
+  let entries: [string, vscode.FileType][];
+  try {
+    entries = await vscode.workspace.fs.readDirectory(cacheDirectory);
+  } catch {
+    return;
+  }
+
+  const folders: Array<{ name: string; uri: vscode.Uri; bytes: number; mtime: number }> = [];
+
+  for (const [name, type] of entries) {
+    if (type !== vscode.FileType.Directory) {
+      continue;
+    }
+
+    const dirUri = vscode.Uri.joinPath(cacheDirectory, name);
+    const stats = await measureDirectory(dirUri);
+    folders.push({ name, uri: dirUri, ...stats });
+  }
+
+  let total = folders.reduce((sum, folder) => sum + folder.bytes, 0);
+  if (total <= maxBytes) {
+    return;
+  }
+
+  // Oldest first; the entry just written is protected.
+  const ordered = [...folders].sort((a, b) => a.mtime - b.mtime);
+  for (const folder of ordered) {
+    if (total <= maxBytes) {
+      break;
+    }
+
+    if (keepDirectoryName !== undefined && folder.name === keepDirectoryName) {
+      continue;
+    }
+
+    try {
+      await vscode.workspace.fs.delete(folder.uri, { recursive: true, useTrash: false });
+    } catch {
+      // Best effort: a busy or missing folder must not fail the convert.
+    }
+    total -= folder.bytes;
+  }
+}
+
+async function measureDirectory(directoryUri: vscode.Uri): Promise<{
+  bytes: number;
+  mtime: number;
+}> {
+  let bytes = 0;
+  let mtime = 0;
+
+  let entries: [string, vscode.FileType][];
+  try {
+    entries = await vscode.workspace.fs.readDirectory(directoryUri);
+  } catch {
+    return { bytes: 0, mtime: 0 };
+  }
+
+  for (const [name, type] of entries) {
+    if (type !== vscode.FileType.File) {
+      continue;
+    }
+
+    try {
+      const stat = await vscode.workspace.fs.stat(vscode.Uri.joinPath(directoryUri, name));
+      bytes += stat.size;
+      mtime = Math.max(mtime, stat.mtime);
+    } catch {
+      // Ignore unreadable entries.
+    }
+  }
+
+  return { bytes, mtime };
+}
+
 function metaUriFor(context: vscode.ExtensionContext, sourceUri: vscode.Uri): vscode.Uri {
   return vscode.Uri.joinPath(getCacheEntryDirectory(context, sourceUri), META_FILE_NAME);
 }

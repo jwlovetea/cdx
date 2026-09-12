@@ -63,7 +63,19 @@ const workspace = {
   }
 };
 
-const vscode = { Uri, workspace, FileType: { File: 1, Directory: 2 } };
+const configValues = { autoOpen: true, cacheMaxMb: 0 };
+
+const vscode = {
+  Uri,
+  workspace: {
+    ...workspace,
+    getConfiguration: () => ({
+      get: (key, defaultValue) =>
+        configValues[key] === undefined ? defaultValue : configValues[key]
+    })
+  },
+  FileType: { File: 1, Directory: 2 }
+};
 
 const originalLoad = Module._load;
 Module._load = function (request, parent, isMain) {

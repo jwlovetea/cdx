@@ -2,11 +2,8 @@ import * as vscode from 'vscode';
 import type { ClinicalDatasetConverter } from './converter';
 import { formatError, isCancellation } from './errors';
 import { logError, logInfo, revealLog } from './log';
-import {
-  convertWithProgress,
-  openConvertedParquet,
-  statSize
-} from './openDataset';
+import { convertWithProgress, openConvertedParquet, statSize } from './openDataset';
+import { isAutoOpenEnabled } from './settings';
 import { renderPreviewHtml } from './previewHtml';
 
 export interface ClinicalDatasetDocument extends vscode.CustomDocument {
@@ -24,9 +21,9 @@ function noop(): void {
 /**
  * Custom editor shown for `.sas7bdat` and `.xpt` files.
  *
- * Always converts and opens the cached Parquet (cache hit is nearly free),
- * then closes this tab so the Data Explorer takes its place. Failures leave
- * a retryable error page.
+ * With `cdx.autoOpen` on (default), converts and opens the cached Parquet,
+ * then closes this tab. With it off, waits for an explicit Open click.
+ * Failures leave a retryable error page.
  */
 export class ClinicalDatasetPreviewProvider
   implements vscode.CustomReadonlyEditorProvider<ClinicalDatasetDocument>, vscode.Disposable
@@ -47,9 +44,11 @@ export class ClinicalDatasetPreviewProvider
     webviewPanel: vscode.WebviewPanel
   ): Promise<void> {
     webviewPanel.webview.options = { enableScripts: true };
+
+    const autoOpen = isAutoOpenEnabled();
     webviewPanel.webview.html = renderPreviewHtml(webviewPanel.webview, {
-      kind: 'loading',
-      message: 'Preparing clinical dataset...'
+      kind: autoOpen ? 'loading' : 'ready',
+      message: autoOpen ? 'Preparing clinical dataset...' : undefined
     });
 
     const listener = webviewPanel.webview.onDidReceiveMessage((message: PreviewMessage) => {
@@ -66,8 +65,11 @@ export class ClinicalDatasetPreviewProvider
       this.#listeners.delete(listener);
     });
 
-    logInfo(`resolveCustomEditor: ${document.uri.toString()}`);
-    await this.#openDataset(document.uri, webviewPanel, { closeOnSuccess: true });
+    logInfo(`resolveCustomEditor: ${document.uri.toString()} autoOpen=${autoOpen}`);
+
+    if (autoOpen) {
+      await this.#openDataset(document.uri, webviewPanel, { closeOnSuccess: true });
+    }
   }
 
   public dispose(): void {

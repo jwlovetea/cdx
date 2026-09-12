@@ -156,6 +156,18 @@ function toFileStat(entry: Entry): FileStat {
   };
 }
 
+/** In-memory configuration values; tests set these to simulate settings. */
+export const configValues: Record<string, unknown> = {
+  autoOpen: true,
+  cacheMaxMb: 0
+};
+
+/** Resets configuration keys used by unit tests. */
+export function resetConfiguration(): void {
+  configValues.autoOpen = true;
+  configValues.cacheMaxMb = 0;
+}
+
 export const workspace = {
   fs: {
     async stat(uri: Uri): Promise<FileStat> {
@@ -177,21 +189,38 @@ export const workspace = {
     async delete(uri: Uri, options?: { recursive?: boolean }): Promise<void> {
       const path = normalise(uri);
       const entry = entries.get(path);
-      if (!entry) {
-        throw FileSystemError.FileNotFound(uri.fsPath);
-      }
-
-      if (entry.kind === 'directory' && options?.recursive !== true) {
-        throw new FileSystemError('FileIsADirectory', uri.fsPath);
-      }
 
       if (options?.recursive === true) {
+        if (!entry) {
+          // seedFile only stores leaves; allow deleting a synthesised folder.
+          const prefix = `${path}/`;
+          let removed = false;
+          for (const key of [...entries.keys()]) {
+            if (key.startsWith(prefix)) {
+              entries.delete(key);
+              removed = true;
+            }
+          }
+          if (!removed) {
+            throw FileSystemError.FileNotFound(uri.fsPath);
+          }
+          return;
+        }
+
         for (const key of [...entries.keys()]) {
           if (key === path || key.startsWith(`${path}/`)) {
             entries.delete(key);
           }
         }
         return;
+      }
+
+      if (!entry) {
+        throw FileSystemError.FileNotFound(uri.fsPath);
+      }
+
+      if (entry.kind === 'directory') {
+        throw new FileSystemError('FileIsADirectory', uri.fsPath);
       }
 
       entries.delete(path);
@@ -253,6 +282,16 @@ export const workspace = {
 
       return entry.content;
     }
+  },
+
+  getConfiguration: (section?: string) => {
+    void section;
+    return {
+      get: <T>(key: string, defaultValue?: T): T => {
+        const value = configValues[key];
+        return (value === undefined ? defaultValue : value) as T;
+      }
+    };
   }
 };
 
@@ -264,6 +303,7 @@ export const window = {
   }),
   showInformationMessage: async () => undefined,
   showErrorMessage: async () => undefined,
+  showWarningMessage: async () => undefined,
   showOpenDialog: async () => undefined
 };
 

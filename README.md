@@ -121,6 +121,13 @@ lets Positron route `*.parquet` into its built-in Data Explorer.
 Use `CDX: Open Cache Folder` to reveal that directory in Finder/Explorer.
 `CDX: Clear CDX Cache` asks for confirmation before deleting.
 
+## Settings
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `cdx.autoOpen` | `true` | Convert and open when you open a `.sas7bdat` / `.xpt`. Off shows an **Open Dataset** button instead. |
+| `cdx.cacheMaxMb` | `0` (unlimited) | Soft cap on cache size. After a convert, oldest cache folders are removed until the cache fits. |
+
 ## Install size
 
 The extension is ~100 MB installed because it bundles DuckDB’s native

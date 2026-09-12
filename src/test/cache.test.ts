@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   clearCacheDirectory,
   ensureCacheDirectory,
+  enforceCacheBudget,
   getCacheDirectoryUri,
   getCachedParquetUri,
   pruneStaleCacheEntries
@@ -91,6 +92,41 @@ describe('cache', () => {
       await expect(
         getCachedParquetUri(createContext(), vscode.Uri.file('/study/missing.sas7bdat'))
       ).rejects.toThrow(CdxError);
+    });
+  });
+
+  describe('enforceCacheBudget', () => {
+    it('is a no-op when the cap is unlimited', async () => {
+      const context = createContext();
+      await ensureCacheDirectory(context);
+      seedFile('/storage/parquet/aaaaaaaaaaaaaaaa/adsl.parquet', 'x'.repeat(100));
+
+      await enforceCacheBudget(context, 0);
+
+      expect(listPaths()).toContain('/storage/parquet/aaaaaaaaaaaaaaaa/adsl.parquet');
+    });
+
+    it('deletes oldest folders until the cache fits, keeping the newest', async () => {
+      const context = createContext();
+      await ensureCacheDirectory(context);
+      // Two 100-byte files; cap of 150 forces one deletion.
+      seedFile('/storage/parquet/aaaaaaaaaaaaaaaa/adsl.parquet', 'x'.repeat(100), 1_000);
+      seedFile('/storage/parquet/bbbbbbbbbbbbbbbb/ae.parquet', 'y'.repeat(100), 2_000);
+
+      await enforceCacheBudget(context, 150, 'bbbbbbbbbbbbbbbb');
+
+      expect(listPaths()).not.toContain('/storage/parquet/aaaaaaaaaaaaaaaa/adsl.parquet');
+      expect(listPaths()).toContain('/storage/parquet/bbbbbbbbbbbbbbbb/ae.parquet');
+    });
+
+    it('never deletes the folder just written', async () => {
+      const context = createContext();
+      await ensureCacheDirectory(context);
+      seedFile('/storage/parquet/aaaaaaaaaaaaaaaa/adsl.parquet', 'x'.repeat(200), 5_000);
+
+      await enforceCacheBudget(context, 50, 'aaaaaaaaaaaaaaaa');
+
+      expect(listPaths()).toContain('/storage/parquet/aaaaaaaaaaaaaaaa/adsl.parquet');
     });
   });
 

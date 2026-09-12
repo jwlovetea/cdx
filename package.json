@@ -101,7 +101,23 @@
         ],
         "priority": "default"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Clinical Data Explorer",
+      "properties": {
+        "cdx.autoOpen": {
+          "type": "boolean",
+          "default": true,
+          "description": "Convert and open a clinical dataset automatically when the file is opened. Disable to show an Open Dataset button instead."
+        },
+        "cdx.cacheMaxMb": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "markdownDescription": "Soft cap on cached Parquet size in megabytes. `0` means unlimited. When exceeded after a convert, CDX deletes oldest cache folders first."
+        }
+      }
+    }
   },
   "scripts": {
     "clean": "node -e \"const fs=require('node:fs'); for (const d of ['out','dist']) fs.rmSync(d, { recursive: true, force: true });\"",

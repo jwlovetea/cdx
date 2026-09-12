@@ -57,8 +57,10 @@ describe('renderPreviewHtml', () => {
     expect(html).toMatch(/\.spinner\s*\{[^}]*display:\s*block/);
   });
 
-  it('hides the spinner when idle or in error state', () => {
-    expect(renderPreviewHtml(createWebview())).toMatch(/\.spinner\s*\{[^}]*display:\s*none/);
+  it('hides the spinner when ready or in error state', () => {
+    expect(renderPreviewHtml(createWebview(), { kind: 'ready' })).toMatch(
+      /\.spinner\s*\{[^}]*display:\s*none/
+    );
     expect(
       renderPreviewHtml(createWebview(), { kind: 'error', message: 'boom' })
     ).toMatch(/\.spinner\s*\{[^}]*display:\s*none/);

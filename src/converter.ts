@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { basename } from 'node:path';
 import * as vscode from 'vscode';
 import {
+  enforceCacheBudget,
   ensureCacheDirectory,
   getCachedParquetUri,
   getCacheEntryDirectory,
@@ -13,6 +14,7 @@ import { type ClinicalDatasetFormat, requireClinicalDatasetFormat } from './clin
 import { UNKNOWN_COLUMN_COUNT, type DuckDbService } from './duckdb';
 import { duckdbStringLiteral } from './duckdbSql';
 import { CdxError, isDuckDbInterrupt, OperationCancelledError } from './errors';
+import { getCacheMaxBytes } from './settings';
 import { deleteQuietly, fileSize } from './workspaceFs';
 
 /** Reports human-readable conversion progress to the caller. */
@@ -148,6 +150,10 @@ export class ClinicalDatasetConverter {
 
     // Drop legacy flat cache files and orphaned .tmp writes.
     await pruneStaleCacheEntries(this.#context);
+
+    // Soft size cap from cdx.cacheMaxMb (0 = unlimited).
+    const entryDirName = basename(getCacheEntryDirectory(this.#context, sourceUri).fsPath);
+    await enforceCacheBudget(this.#context, getCacheMaxBytes(), entryDirName);
 
     return outputUri;
   }

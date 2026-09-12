@@ -6,32 +6,36 @@ export function createNonce(): string {
   return randomBytes(16).toString('hex');
 }
 
-/** What the custom editor should show while the dataset is prepared. */
+/**
+ * What the custom editor should show.
+ *
+ * - `loading` — conversion in progress (default open path)
+ * - `ready` — waiting for the user when `cdx.autoOpen` is off
+ * - `error` — conversion failed; keep the tab open with retry
+ */
 export type PreviewState =
-  | { readonly kind: 'idle' }
   | { readonly kind: 'loading'; readonly message?: string }
+  | { readonly kind: 'ready'; readonly message?: string }
   | { readonly kind: 'error'; readonly message: string };
 
-const IDLE_MESSAGE =
+const READY_MESSAGE =
   'Convert this dataset with DuckDB read_stat and open the cached Parquet result.';
 const LOADING_MESSAGE = 'Converting with DuckDB read_stat...';
 
 /**
  * Renders the custom-editor placeholder.
  *
- * The host always starts in `loading` and closes the tab on success, so the
- * idle "Open Dataset" state is only a fallback. `error` keeps the file open
- * with a retry button instead of a blank webview.
+ * Success closes the tab so Data Explorer takes its place; only `loading`,
+ * `ready`, and `error` need to be drawn here.
  */
 export function renderPreviewHtml(
   webview: vscode.Webview,
-  state: PreviewState = { kind: 'idle' }
+  state: PreviewState = { kind: 'loading' }
 ): string {
   const nonce = createNonce();
   const statusMessage = statusFor(state);
-  const buttonDisabled = state.kind === 'loading';
-  const buttonLabel = state.kind === 'error' ? 'Try Again' : 'Open Dataset';
   const showButton = state.kind !== 'loading';
+  const buttonLabel = state.kind === 'error' ? 'Try Again' : 'Open Dataset';
 
   return `<!doctype html>
 <html lang="en">
@@ -102,7 +106,7 @@ export function renderPreviewHtml(
     <h1>Clinical Data Explorer</h1>
     <div class="spinner" aria-hidden="true"></div>
     <p id="status" role="status" aria-live="polite"${state.kind === 'error' ? ' class="error"' : state.kind === 'loading' ? ' class="loading"' : ''}>${escapeHtml(statusMessage)}</p>
-    ${showButton ? `<button id="open"${buttonDisabled ? ' disabled' : ''}>${buttonLabel}</button>` : ''}
+    ${showButton ? `<button id="open">${buttonLabel}</button>` : ''}
   </main>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
@@ -139,7 +143,7 @@ function statusFor(state: PreviewState): string {
     return state.message;
   }
 
-  return IDLE_MESSAGE;
+  return state.message ?? READY_MESSAGE;
 }
 
 function escapeHtml(value: string): string {
