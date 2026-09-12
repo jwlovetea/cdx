@@ -35,7 +35,8 @@ stub at `src/test/__mocks__/vscode.ts`. It implements enough of `Uri` and
 `testdata/adsl.sas7bdat` with real DuckDB `read_stat`. That catches native
 binding, install, and cache-write regressions unit tests cannot see.
 
-Sample clinical files live in `testdata/` and are not shipped in the VSIX.
+Sample clinical files live in `testdata/` (`adsl.sas7bdat`, `dm.xpt`) and are
+not shipped in the VSIX. `npm run smoke` converts both formats with real DuckDB.
 
 ## Layout
 

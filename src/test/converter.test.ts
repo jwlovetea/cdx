@@ -216,6 +216,17 @@ describe('ClinicalDatasetConverter', () => {
     expect(adsl.toString()).not.toBe(ae.toString());
   });
 
+  it('passes format = xpt for .xpt fixtures and uses a friendly name', async () => {
+    seedFile('/study/adam/dm.xpt', 'xpt bytes', 1_000);
+
+    const parquetUri = await converter.convert(vscode.Uri.file('/study/adam/dm.xpt'));
+
+    expect(parquetUri.fsPath).toMatch(/^\/storage\/parquet\/[0-9a-f]{16}\/dm\.parquet$/);
+    expect(duckDb.statements[0]).toContain("format = 'xpt'");
+    expect(duckDb.statements[0]).toContain('/study/adam/dm.xpt');
+    expect(listPaths()).toContain(parquetUri.fsPath);
+  });
+
   it('reports progress through to completion', async () => {
     const messages: string[] = [];
     await converter.convert(vscode.Uri.file(SOURCE), {

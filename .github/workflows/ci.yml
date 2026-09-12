@@ -28,7 +28,7 @@ jobs:
       - name: Typecheck, lint, unit tests
         run: npm run check
 
-      - name: Compile and smoke (real DuckDB)
+      - name: Compile and smoke (real DuckDB, sas7bdat + xpt)
         run: |
           npm run compile
           npm run smoke
